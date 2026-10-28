@@ -1,0 +1,58 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Rafiq",
+  "version": "1.16.0",
+  "identifier": "com.sofianerm.rafiq",
+  "build": {
+    "frontendDist": "ui"
+  },
+  "app": {
+    "withGlobalTauri": true,
+    "windows": [
+      {
+        "label": "notch",
+        "url": "notch.html",
+        "width": 340,
+        "height": 460,
+        "transparent": true,
+        "decorations": false,
+        "alwaysOnTop": true,
+        "skipTaskbar": true,
+        "resizable": false,
+        "shadow": false,
+        "visible": false,
+        "focus": false,
+        "focusable": false
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": [
+      "nsis"
+    ],
+    "icon": [
+      "icons/icon.ico"
+    ],
+    "createUpdaterArtifacts": false,
+    "windows": {
+      "nsis": {
+        "installerHooks": "nsis-hooks.nsh"
+      }
+    },
+    "publisher": "Sofiane",
+    "copyright": "Copyright (c) 2026 Sofiane"
+  },
+  "plugins": {
+    "updater": {
+      "endpoints": [],
+      "pubkey": "REPLACE_WITH_TAURI_PUBLIC_KEY",
+      "windows": {
+        "installMode": "passive"
+      }
+    }
+  }
+}

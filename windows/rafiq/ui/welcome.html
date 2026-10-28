@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>Bienvenue dans Rafiq</title>
+<style>
+  /* L'accueil du premier lancement : Rafiq se présente et pose ses questions, un écran à la fois, au
+     style du notch (noir, vert #00FF88, Segoe UI). Tout part dans config.json par set_setup et
+     set_notch_modules, et seulement à la fin (« C'est parti ») : fermer avant ne change rien. */
+  :root{--green:#00FF88;--yellow:#F2FF00;--text:#e8e8ea;--text2:#9a9aa0;--text3:#5a5a60;--line:#222226;--field:#141416}
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:#000;color:var(--text);overflow:hidden;user-select:none;
+    font:14px/1.45 "Segoe UI Variable Text","Segoe UI",system-ui,sans-serif}
+  button{font:inherit;color:inherit}
+  [hidden]{display:none!important}
+
+  #bar{height:38px;display:flex;justify-content:flex-end;align-items:center}
+  #close{width:44px;height:34px;border:0;background:transparent;color:var(--text3);font-size:15px}
+  #close:hover{color:var(--text);background:#1a1a1d}
+
+  /* Rafiq : l'anneau du notch, qui respire */
+  #me{display:flex;align-items:center;gap:12px;padding:0 48px;margin-top:4px}
+  #ring{width:46px;height:46px;flex:none;position:relative}
+  #ring svg{width:46px;height:46px;transform:rotate(-90deg)}
+  #ring .bg{stroke:#1d1d20}
+  #ring .fg{stroke:var(--green);transition:stroke-dashoffset .6s cubic-bezier(.2,.8,.2,1)}
+  #ring span{position:absolute;inset:0;display:grid;place-items:center;font:600 18px "Segoe UI";color:var(--green)}
+  #ring::after{content:"";position:absolute;inset:-6px;border-radius:50%;box-shadow:0 0 22px rgba(0,255,136,.18);animation:breathe 3.2s ease-in-out infinite}
+  @keyframes breathe{50%{opacity:.35}}
+  #me .who{font-size:12px;color:var(--text2)}
+  #me .who b{color:var(--text);font-weight:600}
+
+  #stage{position:relative;height:calc(100% - 38px - 50px - 78px)}
+  .screen{position:absolute;inset:0;padding:18px 48px 0;overflow-y:auto;scrollbar-width:none}
+  .screen::-webkit-scrollbar{display:none}
+  .screen.enter{animation:enter .45s cubic-bezier(.2,.8,.2,1) both}
+  .screen.leave{animation:leave .25s ease-in both;pointer-events:none}
+  @keyframes enter{from{opacity:0;transform:translateX(28px)}to{opacity:1;transform:none}}
+  @keyframes leave{to{opacity:0;transform:translateX(-28px)}}
+  .screen > *{animation:rise .5s cubic-bezier(.2,.8,.2,1) both}
+  .screen > *:nth-child(2){animation-delay:.08s}
+  .screen > *:nth-child(3){animation-delay:.16s}
+  .screen > *:nth-child(4){animation-delay:.24s}
+  .screen > *:nth-child(5){animation-delay:.32s}
+  @keyframes rise{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+
+  h1{font-size:26px;font-weight:600;letter-spacing:-.3px;margin:0 0 10px;line-height:1.2}
+  h1 em{font-style:normal;color:var(--green)}
+  p{margin:0 0 14px;color:var(--text2)}
+  .feats{display:grid;grid-template-columns:1fr 1fr;gap:6px 18px;margin:6px 0 4px;font-size:13px}
+  .feats div{display:flex;gap:8px;align-items:baseline}
+  .feats i{font-style:normal;color:var(--green);width:14px;text-align:center;flex:none}
+
+  input,select{font:inherit;font-size:16px;color:var(--text);background:var(--field);border:1px solid var(--line);
+    border-radius:10px;padding:11px 14px;width:100%;outline:none;user-select:text}
+  input:focus,select:focus{border-color:var(--green)}
+  select{font-size:14px;padding:9px 12px}
+  select option{background:#111}
+  .sugg{margin-top:6px}
+  .sugg button{display:block;width:100%;text-align:left;border:0;background:transparent;border-radius:8px;padding:8px 12px}
+  .sugg button:hover{background:#151518}
+  .sugg small,.chosen small{color:var(--text2);margin-left:6px}
+  .note{font-size:12px;color:var(--text3);margin-top:10px}
+  .note .lk{color:var(--text2);text-decoration:underline;cursor:pointer}
+  .chosen{margin-top:12px;font-size:14px}
+  .chosen b{color:var(--green);font-weight:600}
+
+  .yesno{display:flex;gap:10px;margin:4px 0 16px}
+  .yesno button{flex:1;border:1px solid var(--line);background:var(--field);border-radius:12px;padding:13px;font-size:15px}
+  .yesno button:hover{border-color:#3a3a40}
+  .yesno button.on{border-color:var(--green);color:var(--green)}
+
+  .stops .row{display:flex;justify-content:space-between;align-items:center;padding:7px 2px;border-bottom:1px solid var(--line)}
+  .stops .row button{border:0;background:transparent;color:var(--text3);padding:2px 6px}
+  .stops .row button:hover{color:var(--text)}
+
+  .mods{display:grid;gap:8px}
+  .mod{display:flex;gap:12px;align-items:center;text-align:left;border:1px solid var(--line);background:var(--field);border-radius:12px;padding:10px 14px}
+  .mod:hover{border-color:#3a3a40}
+  .mod .t{flex:1}
+  .mod .t b{display:block;font-weight:600;font-size:14px}
+  .mod .t span{font-size:12px;color:var(--text2)}
+  .mod .ck{width:20px;height:20px;border-radius:10px;border:1.5px solid #444;flex:none;display:grid;place-items:center;font-size:11px;font-weight:700;color:#000}
+  .mod.on{border-color:rgba(0,255,136,.45)}
+  .mod.on .ck{background:var(--green);border-color:var(--green)}
+
+  #foot{position:absolute;left:0;right:0;bottom:0;height:78px;display:flex;align-items:center;justify-content:space-between;padding:0 48px}
+  #dots{display:flex;gap:6px}
+  #dots i{width:6px;height:6px;border-radius:3px;background:#2a2a2e;transition:all .3s}
+  #dots i.on{width:18px;background:var(--green)}
+  #nav{display:flex;gap:8px}
+  #back{border:0;background:transparent;color:var(--text2);padding:9px 14px;border-radius:10px}
+  #back:hover{color:var(--text);background:#141416}
+  #next{border:0;background:var(--green);color:#000;font-weight:600;padding:10px 22px;border-radius:10px;transition:transform .15s,opacity .15s}
+  #next:hover{transform:translateY(-1px)}
+  #next:disabled{opacity:.35;transform:none}
+</style>
+</head>
+<body>
+<div id="bar" data-tauri-drag-region><button id="close" title="Fermer" aria-label="Fermer">✕</button></div>
+<div id="me" data-tauri-drag-region>
+  <div id="ring"><svg viewBox="0 0 46 46"><circle class="bg" cx="23" cy="23" r="20" fill="none" stroke-width="4"/><circle class="fg" id="arc" cx="23" cy="23" r="20" fill="none" stroke-width="4" stroke-linecap="round" stroke-dasharray="125.7" stroke-dashoffset="125.7"/></svg><span>ر</span></div>
+  <div class="who"><b>Rafiq</b><br><span id="whoSub">ton compagnon</span></div>
+</div>
+<div id="stage"></div>
+<div id="foot"><div id="dots"></div><div id="nav"><button id="back">Retour</button><button id="next">Suivant</button></div></div>
+
+<script>
+const T = window.__TAURI__;
+const invoke = (cmd, args) => T && T.core ? T.core.invoke(cmd, args) : Promise.reject(new Error('no bridge'));
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
+
+const METHODS = [
+  [3, 'Ligue islamique mondiale'], [12, 'UOIF (France)'], [2, 'ISNA (Amérique du Nord)'],
+  [4, 'Umm al-Qura (La Mecque)'], [5, 'Autorité égyptienne'], [1, 'Karachi'],
+  [13, 'Diyanet (Turquie)'], [15, 'Moonsighting Committee'],
+];
+// Les modules proposés à la fin (la prière et les transports ont leur propre question)
+const EXTRAS = [
+  ['meteo', 'Météo', 'La température sous l’anneau, la pluie qui arrive, les 4 prochains jours.'],
+  ['clipboard', 'Presse-papier', 'Tes 30 derniers copiés, à un clic. Les mots de passe sont ignorés.'],
+  ['asma', 'Un nom d’Allah par jour', 'Un des 99 noms, avec son sens.'],
+  ['screentime', 'Temps d’écran', 'Le temps passé dans chaque app aujourd’hui, gardé sur ce PC.'],
+  ['clippy', 'Clippy', 'Ctrl+Alt+C sur un texte sélectionné : je le corrige, le traduis ou le reformule (clé d’API IA à fournir).'],
+];
+
+let setup = null, modules = [];
+const ans = { prayer:true, transit:false, extras:{} };
+let step = 0;
+const first = () => (setup && setup.user_name || '').trim();
+const cityText = c => c ? c.name + (c.country ? ' (' + c.country + ')' : '') : '';
+
+/* ---- les écrans ---- */
+const SCREENS = [
+  { // 0 — Rafiq se présente
+    html: () => `<h1>Salam ! Moi, c’est <em>Rafiq</em>.</h1>
+      <p>Rafiq, ça veut dire « compagnon ». Je vis sur le bord de ton écran, discret, et je t’aide au quotidien :</p>
+      <div class="feats">
+        <div><i>☾</i>Les heures de prière, et un rappel avant la fin du temps</div>
+        <div><i>⇄</i>Tes prochains trams, bus et trains</div>
+        <div><i>°</i>La météo de chez toi</div>
+        <div><i>⧉</i>Tout ce que tu copies, gardé sous la main</div>
+        <div><i>✦</i>Clippy, une IA pour réécrire tes textes</div>
+        <div><i>◔</i>L’usage de tes IA (Claude, Codex…)</div>
+      </div>
+      <p class="note">Quelques questions et je suis prêt. Tout reste modifiable ensuite dans les Settings.</p>`,
+    next: 'Enchanté !',
+  },
+  { // 1 — le prénom
+    html: () => `<h1>Et toi, comment tu t’appelles ?</h1>
+      <p>Juste ton prénom, pour que je sache à qui je parle.</p>
+      <input id="name" maxlength="40" placeholder="Ton prénom" autocomplete="off" value="${esc(first())}">`,
+    mount: el => {
+      const i = el.querySelector('#name');
+      i.addEventListener('input', () => { setup.user_name = i.value.trim(); refreshNav(); });
+      i.addEventListener('keydown', e => { if(e.key === 'Enter' && canNext()) go(1); });
+      setTimeout(() => i.focus(), 120);
+    },
+    ok: () => first().length > 0,
+  },
+  { // 2 — la ville
+    html: () => `<h1>Enchanté, <em>${esc(first())}</em> ! Tu habites où ?</h1>
+      <p>Ta ville me sert pour la météo et les heures de prière. Je garde seulement ses coordonnées, sur ce PC.</p>
+      <input id="city" placeholder="Ta ville…" autocomplete="off"><div class="sugg" id="citySugg"></div>
+      <div class="chosen" id="cityNow">${setup.city ? 'C’est noté : <b>' + esc(cityText(setup.city)) + '</b>' : ''}</div>`,
+    mount: el => {
+      suggest(el.querySelector('#city'), el.querySelector('#citySugg'), searchCities, c => {
+        setup.city = c;
+        el.querySelector('#cityNow').innerHTML = 'C’est noté : <b>' + esc(cityText(c)) + '</b>';
+        refreshNav();
+      });
+      setTimeout(() => el.querySelector('#city').focus(), 120);
+    },
+    next: () => setup.city ? 'Suivant' : 'Passer',
+  },
+  { // 3 — la prière
+    html: () => `<h1>Tu veux que je te rappelle les heures de prière ?</h1>
+      <p>Un décompte jusqu’à la prochaine prière, une notification discrète à l’adhan, et une autre cinq minutes avant la fin du temps.</p>
+      <div class="yesno" id="pray"><button data-v="1" class="${ans.prayer ? 'on' : ''}">Oui, volontiers</button><button data-v="0" class="${ans.prayer ? '' : 'on'}">Non merci</button></div>
+      <div id="prayMore"></div>`,
+    mount: el => {
+      const more = () => {
+        const box = el.querySelector('#prayMore');
+        if(!ans.prayer){ box.innerHTML = ''; return; }
+        if(setup.prayer_source === 'masjidbox'){
+          box.innerHTML = '<p>Je lis les horaires de ta mosquée sur masjidbox.com. Tu peux passer aux horaires calculés dans les Settings → Profil.</p>';
+          return;
+        }
+        box.innerHTML = '<p style="margin-bottom:6px">Je les calcule' + (setup.city ? ' pour ' + esc(setup.city.name) : '') + ' avec la méthode :</p>'
+          + '<select id="method">' + METHODS.map(([v, n]) => '<option value="' + v + '"' + (v === setup.prayer_method ? ' selected' : '') + '>' + esc(n) + '</option>').join('') + '</select>'
+          + '<p class="note">Ta mosquée publie ses horaires sur masjidbox.com ? Tu pourras l’indiquer dans les Settings → Profil, avec l’iqama.'
+          + (setup.city ? '' : ' Sans ville, je ne peux pas encore les calculer : reviens en arrière pour en choisir une.') + '</p>';
+        box.querySelector('#method').addEventListener('change', e => { setup.prayer_method = Number(e.target.value); });
+      };
+      el.querySelector('#pray').addEventListener('click', e => {
+        const b = e.target.closest('button[data-v]');
+        if(!b) return;
+        ans.prayer = b.dataset.v === '1';
+        el.querySelectorAll('#pray button').forEach(x => x.classList.toggle('on', x === b));
+        more();
+      });
+      more();
+    },
+  },
+  { // 4 — les transports
+    html: () => `<h1>Tu prends les transports ?</h1>
+      <p>Dis-moi tes arrêts : je te montre les prochains départs, retards compris.</p>
+      <div class="yesno" id="tr"><button data-v="1" class="${ans.transit ? 'on' : ''}">Oui</button><button data-v="0" class="${ans.transit ? '' : 'on'}">Pas vraiment</button></div>
+      <div id="trMore"></div>`,
+    mount: el => {
+      const more = () => {
+        const box = el.querySelector('#trMore');
+        if(!ans.transit){ box.innerHTML = ''; return; }
+        box.innerHTML = '<input id="stop" placeholder="Un arrêt, une gare…" autocomplete="off"><div class="sugg" id="stopSugg"></div><div class="stops" id="stops"></div>'
+          + (setup.transit_source === 'opendata'
+            ? '<p class="note">Horaires de transport.opendata.ch (Suisse).</p>'
+            : '<p class="note">Horaires : <span class="lk" data-link="https://transitous.org/sources/">Transitous et ses sources</span> · <span class="lk" data-link="https://www.openstreetmap.org/copyright">© OpenStreetMap</span></p>');
+        const draw = () => {
+          box.querySelector('#stops').innerHTML = setup.transit_stops.map((s, i) =>
+            '<div class="row"><span>' + esc(s.name) + (s.sub ? '<small style="color:#9a9aa0;margin-left:6px">' + esc(s.sub) + '</small>' : '') + '</span><button data-rm="' + i + '" aria-label="Retirer">✕</button></div>').join('');
+          box.querySelector('#stop').disabled = setup.transit_stops.length >= 4;
+        };
+        box.querySelector('#stops').addEventListener('click', e => {
+          const b = e.target.closest('[data-rm]');
+          if(b){ setup.transit_stops.splice(Number(b.dataset.rm), 1); draw(); }
+        });
+        suggest(box.querySelector('#stop'), box.querySelector('#stopSugg'), searchStops, s => {
+          if(!setup.transit_stops.some(x => x.id === s.id)) setup.transit_stops.push(s);
+          draw();
+        });
+        draw();
+        setTimeout(() => box.querySelector('#stop').focus(), 120);
+      };
+      el.querySelector('#tr').addEventListener('click', e => {
+        const b = e.target.closest('button[data-v]');
+        if(!b) return;
+        ans.transit = b.dataset.v === '1';
+        el.querySelectorAll('#tr button').forEach(x => x.classList.toggle('on', x === b));
+        more();
+      });
+      more();
+    },
+  },
+  { // 5 — le reste
+    html: () => `<h1>Et qu’est-ce que tu veux voir d’autre ?</h1>
+      <p>Choisis ce qui t’est utile, tu pourras changer d’avis dans les Settings.</p>
+      <div class="mods" id="mods">${EXTRAS.map(([id, name, what]) =>
+        '<button class="mod' + (ans.extras[id] ? ' on' : '') + '" data-id="' + id + '"><span class="t"><b>' + esc(name) + '</b><span>' + esc(what) + '</span></span><span class="ck">' + (ans.extras[id] ? '✓' : '') + '</span></button>').join('')}</div>`,
+    mount: el => el.querySelector('#mods').addEventListener('click', e => {
+      const b = e.target.closest('.mod');
+      if(!b) return;
+      const on = !ans.extras[b.dataset.id];
+      ans.extras[b.dataset.id] = on;
+      b.classList.toggle('on', on);
+      b.querySelector('.ck').textContent = on ? '✓' : '';
+    }),
+  },
+  { // 6 — c'est parti
+    html: () => `<h1>C’est parti, <em>${esc(first())}</em> !</h1>
+      <p>Je suis sur le bord droit de ton écran. Passe la souris sur moi pour tout voir, clique sur un anneau pour le rafraîchir.</p>
+      <p>Clic droit sur le notch pour les Settings : ton profil, tes modules, leur ordre… tout se change là-bas.</p>
+      <p class="note">${esc(recap())}</p>`,
+    next: 'C’est parti',
+  },
+];
+
+function recap(){
+  const bits = [];
+  if(setup.city) bits.push(setup.city.name);
+  if(ans.prayer) bits.push('prière');
+  if(ans.transit && setup.transit_stops.length) bits.push(setup.transit_stops.length + ' arrêt' + (setup.transit_stops.length > 1 ? 's' : ''));
+  EXTRAS.forEach(([id, name]) => { if(ans.extras[id]) bits.push(name.toLowerCase()); });
+  return bits.length ? 'Au programme : ' + bits.join(' · ') + '.' : '';
+}
+
+/* ---- navigation ---- */
+const stage = document.getElementById('stage');
+let current = null;
+function canNext(){ const s = SCREENS[step]; return !s.ok || s.ok(); }
+function refreshNav(){
+  const s = SCREENS[step], next = document.getElementById('next');
+  next.textContent = typeof s.next === 'function' ? s.next() : (s.next || 'Suivant');
+  next.disabled = !canNext();
+  document.getElementById('back').hidden = step === 0;
+  document.getElementById('dots').innerHTML = SCREENS.map((_, i) => '<i' + (i === step ? ' class="on"' : '') + '></i>').join('');
+  // L'anneau se remplit au fil des questions
+  document.getElementById('arc').style.strokeDashoffset = String(125.7 * (1 - step / (SCREENS.length - 1)));
+  document.getElementById('whoSub').textContent = first() ? 'le compagnon de ' + first() : 'ton compagnon';
+}
+function show(){
+  const el = document.createElement('div');
+  el.className = 'screen enter';
+  el.innerHTML = SCREENS[step].html();
+  if(current){ const old = current; old.className = 'screen leave'; setTimeout(() => old.remove(), 260); }
+  stage.appendChild(el);
+  current = el;
+  if(SCREENS[step].mount) SCREENS[step].mount(el);
+  refreshNav();
+}
+function go(by){
+  if(by > 0 && !canNext()) return;
+  if(by > 0 && step === SCREENS.length - 1){ finish(); return; }
+  step = Math.max(0, Math.min(SCREENS.length - 1, step + by));
+  show();
+}
+document.getElementById('next').addEventListener('click', () => go(1));
+document.getElementById('back').addEventListener('click', () => go(-1));
+document.getElementById('close').addEventListener('click', closeMe);
+document.addEventListener('keydown', e => { if(e.key === 'Escape') closeMe(); });
+document.addEventListener('click', e => {
+  const a = e.target.closest('[data-link]');
+  if(a) invoke('open_link', { url:a.dataset.link }).catch(() => {});
+});
+function closeMe(){
+  try { T.window.getCurrentWindow().close(); } catch(e) { /* rien à fermer hors de l'app */ }
+}
+
+/* Tout est écrit ici, d'un coup : le profil, puis les modules (l'ordre déjà choisi est gardé) */
+async function finish(){
+  const next = document.getElementById('next');
+  next.disabled = true;
+  const on = { prayer:ans.prayer, tpg:ans.transit && setup.transit_stops.length > 0, ...ans.extras };
+  const order = modules.length ? modules.map(m => m.id) : ['prayer', 'tpg', 'meteo', 'clipboard', 'screentime', 'asma', 'clippy'];
+  for(const id of Object.keys(on)) if(!order.includes(id)) order.push(id);
+  try {
+    await invoke('set_setup', { setup:{ ...setup, prayer_notify:ans.prayer, onboarded:true } });
+    await invoke('set_notch_modules', { modules:order.map(id => ({ id, on:!!on[id] })) });
+  } catch(e) {
+    next.disabled = false;
+    next.textContent = 'Réessayer';
+    return;
+  }
+  closeMe();
+}
+
+/* ---- recherches (les mêmes que les Settings → Profil) ---- */
+function suggest(input, list, search, pick){
+  let timer = 0, seq = 0;
+  input.addEventListener('input', () => {
+    clearTimeout(timer);
+    const q = input.value.trim();
+    if(q.length < 2){ list.innerHTML = ''; return; }
+    timer = setTimeout(async () => {
+      const mine = ++seq;
+      let items;
+      try { items = await search(q); } catch(e) { list.innerHTML = '<p class="note">Recherche impossible : ' + esc(e && e.message || e) + '</p>'; return; }
+      if(mine !== seq) return;
+      list.innerHTML = items.length ? '' : '<p class="note">Je ne trouve rien, essaie autrement.</p>';
+      items.forEach(it => {
+        const b = document.createElement('button');
+        b.innerHTML = esc(it.label) + (it.sub ? '<small>' + esc(it.sub) + '</small>' : '');
+        b.addEventListener('mousedown', ev => { ev.preventDefault(); list.innerHTML = ''; input.value = ''; pick(it.value); });
+        list.appendChild(b);
+      });
+    }, 300);
+  });
+}
+async function searchCities(q){
+  const r = await fetch('https://geocoding-api.open-meteo.com/v1/search?count=6&language=fr&format=json&name=' + encodeURIComponent(q));
+  if(!r.ok) throw new Error('HTTP ' + r.status);
+  const j = await r.json();
+  return (j.results || []).map(c => ({
+    label:c.name, sub:[c.admin1, c.country].filter(Boolean).join(', '),
+    value:{ name:c.name, region:c.admin1 || '', country:c.country || '', lat:c.latitude, lon:c.longitude, timezone:c.timezone || '' },
+  }));
+}
+async function searchStops(q){
+  if(setup.transit_source === 'opendata'){
+    const r = await fetch('https://transport.opendata.ch/v1/locations?type=station&query=' + encodeURIComponent(q));
+    if(!r.ok) throw new Error('HTTP ' + r.status);
+    const j = await r.json();
+    return (j.stations || []).filter(s => s.id).slice(0, 8).map(s => ({ label:s.name, sub:'', value:{ id:String(s.id), name:s.name, sub:'' } }));
+  }
+  const stops = await invoke('transit_search', { text:q });
+  return (stops || []).map(s => ({ label:s.name, sub:s.sub, value:s }));
+}
+
+/* ---- départ : on repart de ce qui est déjà réglé (« Revoir l'accueil » ne perd rien) ---- */
+Promise.all([invoke('get_setup'), invoke('get_notch_modules').catch(() => [])]).then(([s, m]) => {
+  setup = s;
+  setup.transit_stops = Array.isArray(setup.transit_stops) ? setup.transit_stops : [];
+  modules = Array.isArray(m) ? m : [];
+  const isOn = id => { const x = modules.find(y => y.id === id); return x ? x.on !== false : !modules.length; };
+  ans.prayer = setup.onboarded ? isOn('prayer') && setup.prayer_notify !== false : true;
+  ans.transit = setup.transit_stops.length > 0;
+  EXTRAS.forEach(([id]) => { ans.extras[id] = setup.onboarded ? isOn(id) : id === 'meteo' || id === 'clipboard'; });
+  show();
+}).catch(() => {
+  setup = { user_name:'', city:null, prayer_source:'aladhan', prayer_method:3, prayer_masjid:'', prayer_notify:true, transit_source:'transitous', transit_stops:[], onboarded:false };
+  show();
+});
+</script>
+</body>
+</html>
