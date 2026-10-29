@@ -57,13 +57,18 @@ pub fn set_setup(app: AppHandle, setup: Setup) {
     let _ = app.emit("setup", get_setup(app.clone()));
 }
 
-/// Les seules pages que les modules peuvent ouvrir : celles que les sources demandent de citer.
-const LINKS: [&str; 5] = [
+/// Les seules pages que les modules peuvent ouvrir : celles que les sources demandent de citer, et
+/// celles où l'on crée une clé d'API pour Clippy.
+const LINKS: [&str; 8] = [
     "https://transitous.org/sources/",
     "https://www.openstreetmap.org/copyright",
     "https://aladhan.com/",
     "https://open-meteo.com/",
     "https://transport.opendata.ch/",
+    // Où créer une clé d'API pour Clippy (accueil)
+    "https://platform.deepseek.com/api_keys",
+    "https://platform.openai.com/api-keys",
+    "https://aistudio.google.com/apikey",
 ];
 
 #[tauri::command]

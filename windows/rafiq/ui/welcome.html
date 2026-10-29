@@ -65,6 +65,8 @@
   .chosen{margin-top:12px;font-size:14px}
   .chosen b{color:var(--green);font-weight:600}
 
+  .mini{flex:none;border:1px solid var(--line);background:var(--field);border-radius:10px;padding:0 16px;font-size:14px}
+  .mini:hover{border-color:var(--green);color:var(--green)}
   .yesno{display:flex;gap:10px;margin:4px 0 16px}
   .yesno button{flex:1;border:1px solid var(--line);background:var(--field);border-radius:12px;padding:13px;font-size:15px}
   .yesno button:hover{border-color:#3a3a40}
@@ -121,11 +123,19 @@ const EXTRAS = [
   ['clipboard', 'Presse-papier', 'Tes 30 derniers copiés, à un clic. Les mots de passe sont ignorés.'],
   ['asma', 'Un nom d’Allah par jour', 'Un des 99 noms, avec son sens.'],
   ['screentime', 'Temps d’écran', 'Le temps passé dans chaque app aujourd’hui, gardé sur ce PC.'],
-  ['clippy', 'Clippy', 'Ctrl+Alt+C sur un texte sélectionné : je le corrige, le traduis ou le reformule (clé d’API IA à fournir).'],
 ];
 
-let setup = null, modules = [];
-const ans = { prayer:true, transit:false, extras:{} };
+// Où obtenir une clé chez chaque fournisseur de Clippy (src/ai.rs) ; open_link n'ouvre que ces pages
+const KEY_PAGES = {
+  deepseek:'https://platform.deepseek.com/api_keys',
+  openai:'https://platform.openai.com/api-keys',
+  gemini:'https://aistudio.google.com/apikey',
+};
+
+let setup = null, modules = [], ai = null;
+const ans = { prayer:true, transit:false, extras:{}, clippy:false };
+// La clé tapée reste dans la page jusqu'à « C'est parti », puis part dans ai.json (ai_save) ; Rust ne la renvoie jamais
+const clip = { provider:'deepseek', key:'', test:null, models:null };
 let step = 0;
 const first = () => (setup && setup.user_name || '').trim();
 const cityText = c => c ? c.name + (c.country ? ' (' + c.country + ')' : '') : '';
@@ -241,7 +251,51 @@ const SCREENS = [
       more();
     },
   },
-  { // 5 — le reste
+  { // 5 — Clippy
+    html: () => `<h1>Tu veux un assistant pour réécrire tes textes ?</h1>
+      <p>Sélectionne un texte n’importe où, Ctrl+Alt+C : je le corrige, le traduis ou le reformule, et je le recolle à sa place. Il me faut une IA et ta propre clé d’API (souvent quelques centimes par mois).</p>
+      <div class="yesno" id="cl"><button data-v="1" class="${ans.clippy ? 'on' : ''}">Oui, je veux Clippy</button><button data-v="0" class="${ans.clippy ? '' : 'on'}">Plus tard</button></div>
+      <div id="clMore"></div>`,
+    mount: el => {
+      const more = () => {
+        const box = el.querySelector('#clMore');
+        if(!ans.clippy){ box.innerHTML = '<p class="note">Tu pourras l’activer quand tu veux : module Clippy, puis Réglages.</p>'; return; }
+        const pv = ai ? ai.providers.find(x => x.id === clip.provider) : null;
+        const t = clip.test;
+        box.innerHTML = '<p style="margin-bottom:6px">Quelle IA ?</p>'
+          + '<select id="clProv">' + (ai ? ai.providers : []).map(x => '<option value="' + esc(x.id) + '"' + (x.id === clip.provider ? ' selected' : '') + '>' + esc(x.name) + '</option>').join('') + '</select>'
+          + '<p class="note" style="margin:8px 0">Pas encore de clé ? <span class="lk" data-link="' + esc(KEY_PAGES[clip.provider] || '') + '">Crée-la chez ' + esc(pv ? pv.name : clip.provider) + '</span>, puis colle-la ici.</p>'
+          + '<div style="display:flex;gap:8px"><input id="clKey" type="password" autocomplete="off" placeholder="' + (pv && pv.has_key && !clip.key ? 'Clé déjà enregistrée' : 'Ta clé d’API') + '" value="' + esc(clip.key) + '"><button class="mini" id="clTest">Tester</button></div>'
+          + '<p class="note" id="clRes" style="color:' + (t ? (t.ok ? 'var(--green)' : '#FF8A70') : 'var(--text3)') + '">' + esc(t ? t.text : 'Ta clé reste sur ce PC.') + '</p>';
+        box.querySelector('#clProv').addEventListener('change', e => { clip.provider = e.target.value; clip.key = ''; clip.test = null; clip.models = null; more(); refreshNav(); });
+        const key = box.querySelector('#clKey');
+        key.addEventListener('input', () => { clip.key = key.value.trim(); clip.test = null; clip.models = null; box.querySelector('#clRes').textContent = 'Ta clé reste sur ce PC.'; box.querySelector('#clRes').style.color = 'var(--text3)'; });
+        box.querySelector('#clTest').addEventListener('click', async () => {
+          const res = box.querySelector('#clRes');
+          res.style.color = 'var(--yellow)'; res.textContent = 'Je vérifie…';
+          try {
+            const list = await invoke('ai_list_models', { provider:clip.provider, apiKey:clip.key || null });
+            clip.models = list;
+            clip.test = { ok:true, text:'Ça marche : ' + list.length + ' modèle' + (list.length > 1 ? 's' : '') + ' disponible' + (list.length > 1 ? 's' : '') + '.' };
+          } catch(e) {
+            clip.test = { ok:false, text:'Cette clé ne marche pas : ' + (e && e.message || e) };
+          }
+          res.style.color = clip.test.ok ? 'var(--green)' : '#FF8A70';
+          res.textContent = clip.test.text;
+        });
+        setTimeout(() => key.focus(), 120);
+      };
+      el.querySelector('#cl').addEventListener('click', e => {
+        const b = e.target.closest('button[data-v]');
+        if(!b) return;
+        ans.clippy = b.dataset.v === '1';
+        el.querySelectorAll('#cl button').forEach(x => x.classList.toggle('on', x === b));
+        more();
+      });
+      more();
+    },
+  },
+  { // 6 — le reste
     html: () => `<h1>Et qu’est-ce que tu veux voir d’autre ?</h1>
       <p>Choisis ce qui t’est utile, tu pourras changer d’avis dans les Settings.</p>
       <div class="mods" id="mods">${EXTRAS.map(([id, name, what]) =>
@@ -255,7 +309,7 @@ const SCREENS = [
       b.querySelector('.ck').textContent = on ? '✓' : '';
     }),
   },
-  { // 6 — c'est parti
+  { // 7 — c'est parti
     html: () => `<h1>C’est parti, <em>${esc(first())}</em> !</h1>
       <p>Je suis sur le bord droit de ton écran. Passe la souris sur moi pour tout voir, clique sur un anneau pour le rafraîchir.</p>
       <p>Clic droit sur le notch pour les Settings : ton profil, tes modules, leur ordre… tout se change là-bas.</p>
@@ -270,6 +324,7 @@ function recap(){
   if(ans.prayer) bits.push('prière');
   if(ans.transit && setup.transit_stops.length) bits.push(setup.transit_stops.length + ' arrêt' + (setup.transit_stops.length > 1 ? 's' : ''));
   EXTRAS.forEach(([id, name]) => { if(ans.extras[id]) bits.push(name.toLowerCase()); });
+  if(clippyOn()) bits.push('Clippy');
   return bits.length ? 'Au programme : ' + bits.join(' · ') + '.' : '';
 }
 
@@ -316,14 +371,25 @@ function closeMe(){
 }
 
 /* Tout est écrit ici, d'un coup : le profil, puis les modules (l'ordre déjà choisi est gardé) */
+function clippyOn(){
+  const pv = ai && ai.providers.find(x => x.id === clip.provider);
+  return ans.clippy && (!!clip.key || !!(pv && pv.has_key));
+}
 async function finish(){
   const next = document.getElementById('next');
   next.disabled = true;
-  const on = { prayer:ans.prayer, tpg:ans.transit && setup.transit_stops.length > 0, ...ans.extras };
+  const on = { prayer:ans.prayer, tpg:ans.transit && setup.transit_stops.length > 0, ...ans.extras, clippy:clippyOn() };
   const order = modules.length ? modules.map(m => m.id) : ['prayer', 'tpg', 'meteo', 'clipboard', 'screentime', 'asma', 'clippy'];
   for(const id of Object.keys(on)) if(!order.includes(id)) order.push(id);
   try {
     await invoke('set_setup', { setup:{ ...setup, prayer_notify:ans.prayer, onboarded:true } });
+    if(ans.clippy && ai && (clip.key || clip.provider !== ai.provider)){
+      const pv = ai.providers.find(x => x.id === clip.provider);
+      // Le modèle par défaut du fournisseur, sauf si le test a montré qu'il n'est plus servi
+      let model = pv ? pv.model : '';
+      if(clip.models && clip.models.length && !clip.models.includes(model)) model = clip.models[0];
+      await invoke('ai_save', { s:{ provider:clip.provider, model, api_key:clip.key || null, hotkey:ai.hotkey, auto_paste:ai.auto_paste } });
+    }
     await invoke('set_notch_modules', { modules:order.map(id => ({ id, on:!!on[id] })) });
   } catch(e) {
     next.disabled = false;
@@ -376,7 +442,9 @@ async function searchStops(q){
 }
 
 /* ---- départ : on repart de ce qui est déjà réglé (« Revoir l'accueil » ne perd rien) ---- */
-Promise.all([invoke('get_setup'), invoke('get_notch_modules').catch(() => [])]).then(([s, m]) => {
+Promise.all([invoke('get_setup'), invoke('get_notch_modules').catch(() => []), invoke('ai_get').catch(() => null)]).then(([s, m, a]) => {
+  ai = a;
+  if(ai) clip.provider = ai.provider;
   setup = s;
   setup.transit_stops = Array.isArray(setup.transit_stops) ? setup.transit_stops : [];
   modules = Array.isArray(m) ? m : [];
@@ -384,6 +452,8 @@ Promise.all([invoke('get_setup'), invoke('get_notch_modules').catch(() => [])]).
   ans.prayer = setup.onboarded ? isOn('prayer') && setup.prayer_notify !== false : true;
   ans.transit = setup.transit_stops.length > 0;
   EXTRAS.forEach(([id]) => { ans.extras[id] = setup.onboarded ? isOn(id) : id === 'meteo' || id === 'clipboard'; });
+  const pv = ai && ai.providers.find(x => x.id === clip.provider);
+  ans.clippy = setup.onboarded ? isOn('clippy') && !!(pv && pv.has_key) : false;
   show();
 }).catch(() => {
   setup = { user_name:'', city:null, prayer_source:'aladhan', prayer_method:3, prayer_masjid:'', prayer_notify:true, transit_source:'transitous', transit_stops:[], onboarded:false };
