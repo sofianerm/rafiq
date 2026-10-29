@@ -1,5 +1,24 @@
 //! Rust-side (tray menu) strings. The page has its own dictionary; keys are kept identical on both sides.
 
+use std::sync::atomic::{AtomicBool, Ordering};
+
+/// La langue de l'app côté Rust (notifications, messages de Clippy) : posée au lancement et à chaque
+/// changement dans les Settings, avec la langue résolue ("fr" ou "en").
+static FR: AtomicBool = AtomicBool::new(true);
+
+pub fn set_lang(resolved: &str) {
+    FR.store(resolved == "fr", Ordering::Relaxed);
+}
+
+pub fn is_fr() -> bool {
+    FR.load(Ordering::Relaxed)
+}
+
+/// Le texte de la langue de l'app
+pub fn l<'a>(fr: &'a str, en: &'a str) -> &'a str {
+    if is_fr() { fr } else { en }
+}
+
 pub fn resolve_auto() -> &'static str {
     #[cfg(windows)]
     unsafe {
