@@ -1,0 +1,12 @@
+{
+  "bundle": {
+    "targets": ["app", "dmg"],
+    "icon": ["icons/icon.png"],
+    "resources": {
+      "../target/hook/release/rafiq-hook": "rafiq-hook"
+    },
+    "macOS": {
+      "minimumSystemVersion": "11.0"
+    }
+  }
+}
