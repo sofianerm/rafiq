@@ -8,10 +8,10 @@ const PIN='<svg viewBox="0 0 24 24"><path d="M15 3l6 6-2 1-3 3 .5 4.5L15 19l-3.5
 
 function ago(ms){
   const m=Math.round((Date.now()-ms)/60000);
-  if(m<1) return "à l'instant";
+  if(m<1) return LT("à l'instant",'just now');
   if(m<60) return m+' min';
   const h=Math.round(m/60); if(h<24) return h+' h';
-  return Math.round(h/24)+' j';
+  return Math.round(h/24)+LT(' j',' d');
 }
 
 const STYLE=`
@@ -33,8 +33,8 @@ const STYLE=`
 
 registerModule({
   id:'clipboard',
-  name:'Presse-papier',
-  title:'Presse-papier',
+  get name(){ return LT('Presse-papier','Clipboard'); },
+  get title(){ return LT('Presse-papier','Clipboard'); },
   glyph:'⎘',
   icon:'<svg viewBox="0 0 24 24"><path d="M9 2h6a1 1 0 0 1 1 1v1h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2V3a1 1 0 0 1 1-1zm0 2v2h6V4zM8 11v1.6h8V11zm0 4v1.6h6V15z"/></svg>',
   items:[],
@@ -54,18 +54,18 @@ registerModule({
     const esc=this.ctx.esc;
     const preview=i.text.replace(/\s+/g,' ').trim().slice(0,200);
     return `<div class="cb-row${this.copied===i.id?' copied':''}" data-id="${i.id}" title="${esc(i.text.slice(0,500))}">`
-      +`<span class="cb-txt">${this.copied===i.id?'Copié ✓':esc(preview)}</span><span class="cb-at">${ago(i.at)}</span>`
-      +`<button class="cb-btn cb-pin${i.pinned?' on':''}" title="${i.pinned?'Désépingler':'Épingler'}">${PIN}</button>`
-      +`<button class="cb-btn cb-del" title="Retirer">×</button></div>`;
+      +`<span class="cb-txt">${this.copied===i.id?LT('Copié ✓','Copied ✓'):esc(preview)}</span><span class="cb-at">${ago(i.at)}</span>`
+      +`<button class="cb-btn cb-pin${i.pinned?' on':''}" title="${i.pinned?LT('Désépingler','Unpin'):LT('Épingler','Pin')}">${PIN}</button>`
+      +`<button class="cb-btn cb-del" title="${LT('Retirer','Remove')}">×</button></div>`;
   },
 
   render(){
-    if(!this.items.length) return `<div class="c-note">Rien pour l'instant. Copie du texte (Ctrl+C) : il apparaîtra ici.</div>`;
+    if(!this.items.length) return `<div class="c-note">${LT("Rien pour l'instant. Copie du texte (Ctrl+C) : il apparaîtra ici.",'Nothing yet. Copy some text (Ctrl+C) and it shows up here.')}</div>`;
     const pinned=this.items.filter(i=>i.pinned), recent=this.items.filter(i=>!i.pinned);
     let html='';
-    if(pinned.length) html+=`<div class="cb-sec">Épinglés</div>`+pinned.map(i=>this.row(i)).join('');
-    if(recent.length) html+=`<div class="cb-sec">Récents</div>`+recent.slice(0,SHOWN).map(i=>this.row(i)).join('');
-    html+=`<div class="cb-foot"><span>${recent.length>SHOWN?`+ ${recent.length-SHOWN} plus anciens`:''}</span>${recent.length?'<span class="cb-clear">Effacer l\'historique</span>':''}</div>`;
+    if(pinned.length) html+=`<div class="cb-sec">${LT('Épinglés','Pinned')}</div>`+pinned.map(i=>this.row(i)).join('');
+    if(recent.length) html+=`<div class="cb-sec">${LT('Récents','Recent')}</div>`+recent.slice(0,SHOWN).map(i=>this.row(i)).join('');
+    html+=`<div class="cb-foot"><span>${recent.length>SHOWN?`+ ${recent.length-SHOWN} ${LT('plus anciens','older')}`:''}</span>${recent.length?'<span class="cb-clear">'+LT("Effacer l'historique",'Clear history')+'</span>':''}</div>`;
     return html;
   },
 

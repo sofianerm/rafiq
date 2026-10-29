@@ -13,17 +13,17 @@ const RAIN='#4DA3FF';
 
 // Codes WMO → [libellé, famille d'icône]
 function describe(code){
-  if(code===0) return ['Ciel clair','clear'];
-  if(code===1) return ['Plutôt dégagé','clear'];
-  if(code===2) return ['Partiellement nuageux','partly'];
-  if(code===3) return ['Couvert','cloud'];
-  if(code===45||code===48) return ['Brouillard','fog'];
-  if(code>=51&&code<=57) return ['Bruine','rain'];
-  if(code>=61&&code<=67) return [code>=65?'Forte pluie':code>=63?'Pluie':'Pluie faible','rain'];
-  if(code>=71&&code<=77) return ['Neige','snow'];
-  if(code>=80&&code<=82) return ['Averses','rain'];
-  if(code===85||code===86) return ['Averses de neige','snow'];
-  if(code>=95) return ['Orage','storm'];
+  if(code===0) return [LT('Ciel clair','Clear sky'),'clear'];
+  if(code===1) return [LT('Plutôt dégagé','Mostly clear'),'clear'];
+  if(code===2) return [LT('Partiellement nuageux','Partly cloudy'),'partly'];
+  if(code===3) return [LT('Couvert','Overcast'),'cloud'];
+  if(code===45||code===48) return [LT('Brouillard','Fog'),'fog'];
+  if(code>=51&&code<=57) return [LT('Bruine','Drizzle'),'rain'];
+  if(code>=61&&code<=67) return [code>=65?LT('Forte pluie','Heavy rain'):code>=63?LT('Pluie','Rain'):LT('Pluie faible','Light rain'),'rain'];
+  if(code>=71&&code<=77) return [LT('Neige','Snow'),'snow'];
+  if(code>=80&&code<=82) return [LT('Averses','Showers'),'rain'];
+  if(code===85||code===86) return [LT('Averses de neige','Snow showers'),'snow'];
+  if(code>=95) return [LT('Orage','Thunderstorm'),'storm'];
   return ['—','cloud'];
 }
 const CLOUD='<path d="M7 19a4.5 4.5 0 0 1-.7-8.95 6 6 0 0 1 11.6 1.5A3.75 3.75 0 0 1 17.5 19z"/>';
@@ -44,7 +44,7 @@ function iconOf(code,isDay){
   if(f==='partly'&&!isDay) return ICONS.cloud;
   return ICONS[f]||ICONS.cloud;
 }
-const hh=iso=>String(iso).slice(11,13)+'h';
+const hh=iso=>String(iso).slice(11,13)+LT('h',':00');
 const deg=v=>Math.round(v)+'°';
 
 const STYLE=`
@@ -64,8 +64,8 @@ const STYLE=`
 
 registerModule({
   id:'meteo',
-  name:'Météo',
-  title:'Météo',
+  get name(){ return LT('Météo','Weather'); },
+  get title(){ return this.city?LT('Météo','Weather')+' · '+this.city.name:LT('Météo','Weather'); },
   glyph:'°',
   city:null,
   data:null,
@@ -79,7 +79,7 @@ registerModule({
     const st=document.createElement('style'); st.textContent=STYLE; document.head.appendChild(st);
     const take=s=>{
       const c=s&&s.city, same=c&&this.city&&c.lat===this.city.lat&&c.lon===this.city.lon;
-      this.city=c||null; this.title=c?'Météo · '+c.name:'Météo';
+      this.city=c||null;
       if(!same){ this.data=null; this.load(); }
     };
     ctx.listen('setup',e=>take(e.payload)).catch(()=>{});
@@ -117,21 +117,21 @@ registerModule({
 
   render(){
     const esc=this.ctx.esc;
-    if(!this.city) return `<div class="c-note">Choisis ta ville dans les Settings → Profil.</div>`;
-    if(!this.data) return `<div class="c-note">${esc(this.error?'Météo indisponible : '+this.error:'Chargement…')}</div>`;
+    if(!this.city) return `<div class="c-note">${LT('Choisis ta ville dans les Settings → Profil.','Pick your city in Settings → Profile.')}</div>`;
+    if(!this.data) return `<div class="c-note">${esc(this.error?LT('Météo indisponible : ','Weather unavailable: ')+this.error:LT('Chargement…','Loading…'))}</div>`;
     const c=this.data.current, d=this.data.daily, [label]=describe(c.weather_code);
     let html=`<div class="mt-now"><span class="ic">${iconOf(c.weather_code,c.is_day)}</span><div><div class="t">${deg(c.temperature_2m)}</div><div class="d">${esc(label)}</div></div></div>`;
-    html+=`<div class="mt-meta">Ressenti ${deg(c.apparent_temperature)} · Vent ${Math.round(c.wind_speed_10m)} km/h · Humidité ${Math.round(c.relative_humidity_2m)} %</div>`;
+    html+=`<div class="mt-meta">${LT('Ressenti','Feels like')} ${deg(c.apparent_temperature)} · ${LT('Vent','Wind')} ${Math.round(c.wind_speed_10m)} km/h · ${LT('Humidité','Humidity')} ${Math.round(c.relative_humidity_2m)} %</div>`;
     // Le premier créneau où la pluie devient probable dans les 12 h
     const wet=this.hours(12).find(h=>h.p>=50);
-    if(wet) html+=`<div class="mt-alert">☂ Pluie probable vers ${hh(wet.t)} (${wet.p} %)</div>`;
+    if(wet) html+=`<div class="mt-alert">☂ ${LT('Pluie probable vers','Rain likely around')} ${hh(wet.t)} (${wet.p} %)</div>`;
     html+=`<div class="mt-hours">`+this.hours(6).map(h=>`<div><div class="h">${hh(h.t)}</div>${iconOf(h.code,h.day)}<div>${deg(h.temp)}</div><div class="p">${h.p?h.p+' %':''}</div></div>`).join('')+`</div>`;
     html+=`<div class="mt-days">`+d.time.map((t,i)=>{
-      const name=i===0?"Aujourd'hui":new Date(t+'T12:00').toLocaleDateString('fr-FR',{weekday:'long'});
+      const name=i===0?LT("Aujourd'hui",'Today'):new Date(t+'T12:00').toLocaleDateString(moduleLocale(),{weekday:'long'});
       return `<div class="mt-day"><span class="n">${name}</span>${iconOf(d.weather_code[i],1)}<span class="p">${d.precipitation_probability_max[i]?d.precipitation_probability_max[i]+' %':''}</span><span class="r"><small>${deg(d.temperature_2m_min[i])}</small> ${deg(d.temperature_2m_max[i])}</span></div>`;
     }).join('')+`</div>`;
-    html+=`<div class="c-sub" style="margin-top:8px">Soleil ${d.sunrise[0].slice(11,16)} → ${d.sunset[0].slice(11,16)}${this.error?' · '+esc(this.error):''}</div>`;
-    html+=`<div class="c-sub src-link">Données : <span data-link="https://open-meteo.com/">Open-Meteo.com</span></div>`;
+    html+=`<div class="c-sub" style="margin-top:8px">${LT('Soleil','Sun')} ${d.sunrise[0].slice(11,16)} → ${d.sunset[0].slice(11,16)}${this.error?' · '+esc(this.error):''}</div>`;
+    html+=`<div class="c-sub src-link">${LT('Données','Data')} : <span data-link="https://open-meteo.com/">Open-Meteo.com</span></div>`;
     return html;
   },
 

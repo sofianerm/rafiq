@@ -103,6 +103,8 @@ const NAMES=[
   ['الرَّشِيدُ','Ar-Rashîd','Celui qui guide sur la voie droite'],
   ['الصَّبُورُ','As-Sabûr','Le Patient'],
 ];
+// Le sens en anglais, dans le même ordre
+const EN=["The Most Compassionate", "The Most Merciful", "The King, the Sovereign", "The Most Holy", "The Source of Peace", "The Granter of Security", "The Guardian", "The Almighty", "The Compeller, the Restorer", "The Supreme in Greatness", "The Creator", "The Originator", "The Fashioner", "The Ever-Forgiving", "The Subduer", "The Bestower", "The Provider", "The Opener, the Judge", "The All-Knowing", "The Withholder", "The Extender", "The Abaser", "The Exalter", "The Honourer", "The Humiliator", "The All-Hearing", "The All-Seeing", "The Judge", "The Just", "The Subtle, the Gentle", "The All-Aware", "The Forbearing", "The Magnificent", "The All-Forgiving", "The Appreciative", "The Most High", "The Most Great", "The Preserver", "The Sustainer", "The Reckoner", "The Majestic", "The Generous", "The Watchful", "The Responsive", "The All-Encompassing", "The All-Wise", "The Loving", "The Most Glorious", "The Resurrector", "The Witness", "The Truth", "The Trustee", "The All-Strong", "The Firm", "The Protecting Friend", "The Praiseworthy", "The Accounter", "The Originator of creation", "The Restorer", "The Giver of Life", "The Taker of Life", "The Ever-Living", "The Self-Subsisting", "The Finder", "The Glorious", "The One", "The Unique", "The Eternal Refuge", "The All-Powerful", "The Determiner", "The Expediter", "The Delayer", "The First", "The Last", "The Manifest", "The Hidden", "The Governor", "The Most Exalted", "The Source of Goodness", "The Acceptor of Repentance", "The Avenger", "The Pardoner", "The Most Kind", "The Owner of Sovereignty", "The Lord of Majesty and Generosity", "The Equitable", "The Gatherer", "The Self-Sufficient", "The Enricher", "The Preventer", "The Distresser", "The Benefiter", "The Light", "The Guide", "The Incomparable Originator", "The Everlasting", "The Inheritor", "The Guide to the Right Path", "The Most Patient"];
 // Le nom du jour : le même toute la journée, le suivant le lendemain
 function todayIndex(){
   const d=new Date(), local=Date.UTC(d.getFullYear(),d.getMonth(),d.getDate());
@@ -123,7 +125,7 @@ const STYLE=`
 registerModule({
   id:'asma',
   name:'Asmâ\' al-Husnâ',
-  title:'Nom d\'Allah du jour',
+  get title(){ return LT('Nom d\'Allah du jour','Name of Allah of the day'); },
   glyph:'۩',
   icon:'<svg viewBox="0 0 24 24"><path d="M12 1.5l2.6 3.6 4.4-.7-.7 4.4 3.6 2.6-3.6 2.6.7 4.4-4.4-.7L12 22.5l-2.6-3.6-4.4.7.7-4.4L2.1 12l3.6-2.6-.7-4.4 4.4.7zm0 5.5a5 5 0 1 0 0 10 5 5 0 0 0 0-10z"/></svg>',
   offset:0, // décalage par rapport au nom du jour, quand on feuillette
@@ -146,11 +148,11 @@ registerModule({
   onClick(){ this.offset++; this.ctx.update(); },
 
   render(){
-    const i=this.index(), [ar,tr,fr]=NAMES[i], esc=this.ctx.esc;
+    const i=this.index(), [ar,tr,frMeaning]=NAMES[i], fr=LT(frMeaning,EN[i]), esc=this.ctx.esc;
     return `<div class="as-ar">${ar}</div><div class="as-tr">${esc(tr)}</div><div class="as-fr">${esc(fr)}</div>`
-      +`<div class="as-nav"><button class="prev" title="Précédent">‹</button>`
-      +`<span>${i+1} / 99${this.offset?` · <button class="today">Aujourd'hui</button>`:''}</span>`
-      +`<button class="next" title="Suivant">›</button></div>`;
+      +`<div class="as-nav"><button class="prev" title="${LT('Précédent','Previous')}">‹</button>`
+      +`<span>${i+1} / 99${this.offset?` · <button class="today">${LT("Aujourd'hui",'Today')}</button>`:''}</span>`
+      +`<button class="next" title="${LT('Suivant','Next')}">›</button></div>`;
   },
 
   mount(el){
