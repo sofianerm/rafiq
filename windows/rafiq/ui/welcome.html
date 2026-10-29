@@ -85,6 +85,12 @@
   .mod .ck{width:20px;height:20px;border-radius:10px;border:1.5px solid #444;flex:none;display:grid;place-items:center;font-size:11px;font-weight:700;color:#000}
   .mod.on{border-color:rgba(0,255,136,.45)}
   .mod.on .ck{background:var(--green);border-color:var(--green)}
+  .mod .ic{width:22px;height:22px;flex:none;display:grid;place-items:center;color:var(--text)}
+  .mod .ic svg{width:20px;height:20px;fill:currentColor}
+  .mod .ic img{width:20px;height:20px;border-radius:5px}
+  .mod .ic.letter{font-size:10px;font-weight:700;background:#1c1c20;border-radius:6px}
+  #usage{grid-template-columns:1fr 1fr}
+  #usage .mod{padding:8px 10px}
 
   #foot{position:absolute;left:0;right:0;bottom:0;height:78px;display:flex;align-items:center;justify-content:space-between;padding:0 48px}
   #dots{display:flex;gap:6px}
@@ -131,6 +137,13 @@ const KEY_PAGES = {
   openai:'https://platform.openai.com/api-keys',
   gemini:'https://aistudio.google.com/apikey',
 };
+
+// Les IA dont le notch peut suivre l'usage (TRAY_PROVIDER_IDS dans main.rs)
+const USAGE = [
+  ['claude', 'Claude', 'Claude Code, Claude.ai'], ['codex', 'Codex', 'ChatGPT Codex'], ['gemini', 'Antigravity', 'Google'],
+  ['cursor', 'Cursor', ''], ['grok', 'Grok', 'xAI'], ['glm', 'GLM', 'z.ai'],
+];
+let usage = { picked:new Set(), detected:new Set(), glyphs:{} };
 
 let setup = null, modules = [], ai = null;
 const ans = { prayer:true, transit:false, extras:{}, clippy:false };
@@ -296,7 +309,25 @@ const SCREENS = [
       more();
     },
   },
-  { // 6 — le reste
+  { // 6 — les IA suivies
+    html: () => `<h1>Tu utilises quelles IA ?</h1>
+      <p>Je peux suivre ta consommation : ce qu’il te reste de ton forfait, et si Claude travaille encore. Coche celles que tu utilises${usage.detected.size ? ' ; j’ai pré-coché celles que j’ai trouvées sur ce PC' : ''}.</p>
+      <div class="mods" id="usage">${USAGE.map(([id, name, sub]) => {
+        const on = usage.picked.has(id), g = usage.glyphs[id];
+        const icon = g && g.kind === 'svg' && g.svg ? '<span class="ic">' + g.svg + '</span>' : g && g.url ? '<span class="ic"><img src="' + esc(g.url) + '" alt=""></span>' : '<span class="ic letter">' + esc(name.slice(0, 2)) + '</span>';
+        return '<button class="mod' + (on ? ' on' : '') + '" data-id="' + id + '">' + icon + '<span class="t"><b>' + esc(name) + '</b><span>' + esc(usage.detected.has(id) ? 'Trouvé sur ce PC' : sub || ' ') + '</span></span><span class="ck">' + (on ? '✓' : '') + '</span></button>';
+      }).join('')}</div>
+      <p class="note">Aucune ? Pas de souci, le notch n’affichera que tes modules.</p>`,
+    mount: el => el.querySelector('#usage').addEventListener('click', e => {
+      const b = e.target.closest('.mod');
+      if(!b) return;
+      const id = b.dataset.id, on = !usage.picked.has(id);
+      on ? usage.picked.add(id) : usage.picked.delete(id);
+      b.classList.toggle('on', on);
+      b.querySelector('.ck').textContent = on ? '✓' : '';
+    }),
+  },
+  { // 7 — le reste
     html: () => `<h1>Et qu’est-ce que tu veux voir d’autre ?</h1>
       <p>Choisis ce qui t’est utile, tu pourras changer d’avis dans les Settings.</p>
       <div class="mods" id="mods">${EXTRAS.map(([id, name, what]) =>
@@ -310,7 +341,7 @@ const SCREENS = [
       b.querySelector('.ck').textContent = on ? '✓' : '';
     }),
   },
-  { // 7 — c'est parti
+  { // 8 — c'est parti
     html: () => `<h1>C’est parti, <em>${esc(first())}</em> !</h1>
       <p>Je suis sur le bord droit de ton écran. Passe la souris sur moi pour tout voir, clique sur un anneau pour le rafraîchir.</p>
       <p>Clic droit sur le notch pour les Settings : ton profil, tes modules, leur ordre… tout se change là-bas.</p>
@@ -326,6 +357,7 @@ function recap(){
   if(ans.transit && setup.transit_stops.length) bits.push(setup.transit_stops.length + ' arrêt' + (setup.transit_stops.length > 1 ? 's' : ''));
   EXTRAS.forEach(([id, name]) => { if(ans.extras[id]) bits.push(name.toLowerCase()); });
   if(clippyOn()) bits.push('Clippy');
+  USAGE.forEach(([id, name]) => { if(usage.picked.has(id)) bits.push(name); });
   return bits.length ? 'Au programme : ' + bits.join(' · ') + '.' : '';
 }
 
@@ -392,6 +424,9 @@ async function finish(){
       await invoke('ai_save', { s:{ provider:clip.provider, model, api_key:clip.key || null, hotkey:ai.hotkey, auto_paste:ai.auto_paste } });
     }
     await invoke('set_notch_modules', { modules:order.map(id => ({ id, on:!!on[id] })) });
+    // Les IA suivies : seulement celles cochées ; aucune = « none » (le notch ne montre que les modules)
+    const slots = USAGE.map(([id]) => id).filter(id => usage.picked.has(id)).map(provider => ({ provider }));
+    await invoke('set_notch_slots', { slots:slots.length ? slots : [{ provider:'none' }] });
   } catch(e) {
     next.disabled = false;
     next.textContent = 'Réessayer';
@@ -443,7 +478,14 @@ async function searchStops(q){
 }
 
 /* ---- départ : on repart de ce qui est déjà réglé (« Revoir l'accueil » ne perd rien) ---- */
-Promise.all([invoke('get_setup'), invoke('get_notch_modules').catch(() => []), invoke('ai_get').catch(() => null)]).then(([s, m, a]) => {
+Promise.all([invoke('get_setup'), invoke('get_notch_modules').catch(() => []), invoke('ai_get').catch(() => null),
+  invoke('get_tray_options').catch(() => []), invoke('get_notch_slots').catch(() => []), invoke('get_glyphs').catch(() => ({}))]).then(([s, m, a, opts, slots, glyphs]) => {
+  // Trouvées sur ce PC : celles qui ne sont pas « absentes » ; déjà réglé (Revoir l'accueil) : le choix actuel
+  usage.glyphs = glyphs || {};
+  (Array.isArray(opts) ? opts : []).forEach(o => { if(o && o.status && o.status !== 'absent') usage.detected.add(o.id); });
+  const chosen = (Array.isArray(slots) ? slots : []).map(x => x && x.provider);
+  if(s && s.onboarded) (chosen.length ? chosen.filter(id => id !== 'none') : [...usage.detected]).forEach(id => usage.picked.add(id));
+  else usage.detected.forEach(id => usage.picked.add(id));
   ai = a;
   if(ai) clip.provider = ai.provider;
   setup = s;

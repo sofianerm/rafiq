@@ -1097,6 +1097,7 @@ const NO_RING = 'These have no ring to place. Switch one on and it joins the end
 
 function notchOn(){
   const ids = providerList().map(p => p.id);
+  if(notchSlots.some(sl => sl && sl.provider === 'none')) return [];
   if(!notchSlots.length) return ids.map(id => ({ provider:id }));
   const on = notchSlots.filter(sl => sl && ids.indexOf(sl.provider) >= 0);
   return on.length ? on : ids.map(id => ({ provider:id }));
@@ -1139,7 +1140,8 @@ function renderAccounts(){
 }
 function saveNotch(next){
   const ids = providerList().map(p => p.id);
-  const store = next.length === ids.length ? [] : next;
+  // Tout coché = la liste vide (toutes, même celles installées plus tard) ; rien = « none »
+  const store = next.length === ids.length ? [] : next.length ? next : [{ provider:'none' }];
   const prev = notchSlots;
   notchSlots = store;
   renderAccounts();
@@ -1153,7 +1155,6 @@ function toggleNotch(id){
   const on = notchOn().slice();
   const at = on.findIndex(sl => sl.provider === id);
   if(at >= 0){
-    if(on.length <= 1){ toast(ui('At least one provider stays on the notch', 'At least one provider stays on the notch')); return; }
     on.splice(at, 1);
   } else {
     on.push({ provider:id });
@@ -1537,6 +1538,7 @@ function boot(){
   refreshOptions();
   call('get_notch_slots', undefined, []).then(v => {
     notchSlots = Array.isArray(v) ? v.filter(x => x && typeof x.provider === 'string').map(x => ({ provider:x.provider })) : [];
+    try { window.__TAURI__.event.listen('notch_slots', e => { if(Array.isArray(e.payload)){ notchSlots = e.payload; renderAccounts(); renderModules(); } }); } catch(e) { /* relu à la prochaine ouverture */ }
     renderAccounts();
   });
   call('get_notch_modules', undefined, []).then(v => {

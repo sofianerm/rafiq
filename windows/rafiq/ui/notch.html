@@ -950,6 +950,8 @@ function providers(){
   // Modules sit after the providers; which ones and in what order is their own choice in Settings (notch_modules)
   const mods=arrangeModules(modulePrefs).filter(o=>o.on).map(o=>o.module)
     .map(m=>({id:m.id,base:m.id,name:m.name,glyph:m.glyph,module:m,snap:MODULE_SNAP}));
+  // Aucune IA choisie (accueil, Settings) : seulement les modules, s'il y en a
+  if(Array.isArray(notchSlots)&&notchSlots.some(s=>s&&s.provider==='none')&&mods.length) return mods;
   if(Array.isArray(notchSlots)&&notchSlots.length){
     const picked=list.filter(p=>!!slotFor(p.base));
     // Never leave the notch with nothing in it: an empty result means the choice no longer matches
