@@ -58,7 +58,7 @@ pub struct TransitStop {
 pub struct Config {
     #[serde(default = "default_port")]
     pub port: u16,
-    /// "auto" | "zh" | "zh-Hant" | "en" | "ja" | "ko" | "pt-BR" | "ru" | "uk"
+    /// "auto" (la langue de Windows), "fr" ou "en"
     #[serde(default = "default_lang")]
     pub lang: String,
     #[serde(default)]

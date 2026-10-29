@@ -71,11 +71,11 @@ pub struct AppState {
     pub activity: Mutex<Vec<activity::Activity>>,
 }
 
+/// "fr" ou "en". Une ancienne valeur (coréen, russe…) ou "auto" suivent la langue du système.
 fn resolved_lang(raw: &str) -> String {
-    if raw == "auto" {
-        i18n::resolve_auto().to_string()
-    } else {
-        raw.to_string()
+    match raw {
+        "fr" | "en" => raw.to_string(),
+        _ => i18n::resolve_auto().to_string(),
     }
 }
 
@@ -633,7 +633,7 @@ pub fn apply_lang(app: &AppHandle, lang: &str) {
     {
         let st = app.state::<AppState>();
         let mut c = st.cfg.lock().unwrap();
-        c.lang = lang.to_string();
+        c.lang = if matches!(lang, "fr" | "en") { lang.to_string() } else { "auto".into() };
         config::save(&c);
     }
     // Through refresh_menu, which makes sure the swap happens on the main thread: doing it from the
