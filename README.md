@@ -25,7 +25,7 @@ and the modules can be reordered or hidden.
 
 ## Install
 
-Download `Rafiq_<version>_x64-setup.exe` from the releases (when published) and run it. It installs
+Download `Rafiq_<version>_x64-setup.exe` from the [latest release](https://github.com/sofianerm/rafiq/releases/latest) and run it. It installs
 for the current user, without administrator rights. The installer is **not code-signed**, so Windows
 SmartScreen shows *Windows protected your PC* the first time: choose **More info**, then **Run anyway**.
 
@@ -68,10 +68,7 @@ key for Clippy):
 
 ## License
 
-MIT — see [`LICENSE`](LICENSE). Rafiq started as a fork of
-[vinzdg/codenotch](https://github.com/vinzdg/codenotch) and its Windows port; their copyright notices
-are kept in the license files. The app icon is still derived from the original one and will be
-replaced.
+MIT — see [`LICENSE`](LICENSE).
 
 Designed and built by Sofiane.
 
@@ -94,11 +91,11 @@ Gratuit et open source (MIT).
 Au premier lancement, Rafiq se présente et te pose quelques questions (prénom, ville, prière, arrêts,
 modules). Tout se change ensuite dans les Settings → Profil.
 
-**Installation** : lance `Rafiq_<version>_x64-setup.exe`. L'installeur n'est pas signé : au premier
+**Installation** : télécharge `Rafiq_<version>_x64-setup.exe` dans la [dernière release](https://github.com/sofianerm/rafiq/releases/latest) et lance-le. L'installeur n'est pas signé : au premier
 lancement, Windows SmartScreen affiche « Windows a protégé votre ordinateur » → **Informations
 complémentaires** → **Exécuter quand même**.
 
 **Sources** : Transitous ([ses sources](https://transitous.org/sources/), © [OpenStreetMap](https://www.openstreetmap.org/copyright)),
 transport.opendata.ch, Aladhan, Masjidbox, Open-Meteo.
 
-Licence MIT. Fork de [vinzdg/codenotch](https://github.com/vinzdg/codenotch). Conçu et développé par Sofiane.
+Licence MIT. Conçu et développé par Sofiane.
