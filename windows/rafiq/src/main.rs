@@ -33,6 +33,7 @@ mod screentime;
 mod ai;
 mod setup;
 mod transit;
+mod platform;
 
 use std::sync::Mutex;
 use tauri::{AppHandle, Emitter, Manager};
@@ -431,15 +432,7 @@ pub fn reset_bar(app: &AppHandle) {
 /// (`NotchWindowController.dragged`). Releasing it saves that place for that edge alone.
 static DRAGGING: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
-#[cfg(windows)]
-fn left_button_down() -> bool {
-    use windows::Win32::UI::Input::KeyboardAndMouse::{GetAsyncKeyState, VK_LBUTTON};
-    unsafe { (GetAsyncKeyState(VK_LBUTTON.0 as i32) as u16 & 0x8000) != 0 }
-}
-#[cfg(not(windows))]
-fn left_button_down() -> bool {
-    false
-}
+use platform::left_button_down;
 
 /// Which edge a point belongs to: the screen split into four triangles about its centre, as on the
 /// Mac. Nearest-edge rather than hit testing the zones, which are thin — landing inside a 70 px strip
@@ -736,14 +729,7 @@ pub fn reload_glyphs(app: &AppHandle) {
 fn open_data_dir() {
     let dir = config::config_path().parent().map(|p| p.to_path_buf()).unwrap_or_default();
     let _ = std::fs::create_dir_all(glyphs::user_dir());
-    let mut cmd = std::process::Command::new("explorer");
-    cmd.arg(dir.as_os_str());
-    #[cfg(windows)]
-    {
-        use std::os::windows::process::CommandExt;
-        cmd.creation_flags(0x0800_0000);
-    }
-    let _ = cmd.spawn();
+    platform::reveal_dir(&dir);
 }
 
 #[tauri::command]
@@ -776,14 +762,7 @@ pub(crate) fn provider_page(provider: &str) -> Option<(&'static str, &'static st
 
 pub(crate) fn open_provider_page(provider: &str) {
     let Some((url, _)) = provider_page(provider) else { return };
-    let mut cmd = std::process::Command::new("cmd");
-    cmd.args(["/C", "start", "", url]);
-    #[cfg(windows)]
-    {
-        use std::os::windows::process::CommandExt;
-        cmd.creation_flags(0x0800_0000);
-    }
-    let _ = cmd.spawn();
+    platform::open_url(url);
 }
 
 /// Hot rectangles in **physical pixels**, window-relative, as x,y,w,h: the pill, plus the card
@@ -1807,6 +1786,9 @@ fn main() {
             ai::ai_list_models
         ])
         .setup(move |app| {
+            // Sur macOS : pas d'icône dans le Dock, Rafiq vit dans la barre des menus et le notch
+            #[cfg(target_os = "macos")]
+            app.set_activation_policy(tauri::ActivationPolicy::Accessory);
             let handle = app.handle().clone();
             place_notch(&handle);
             if let Some(w) = handle.get_webview_window("notch") {

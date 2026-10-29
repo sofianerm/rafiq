@@ -1,0 +1,75 @@
+# Construit Rafiq pour macOS (Apple Silicon + Intel, « universal ») : .app dans un .dmg, non signé.
+# Lancé à la main (Actions → macOS → Run workflow) ou à chaque push sur la branche `macos`.
+# Avec `release_tag`, le .dmg est aussi ajouté à cette release GitHub.
+name: macOS
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "Release à laquelle joindre le .dmg (vide = artefact seulement)"
+        required: false
+        default: ""
+  push:
+    branches: [macos]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: macos-latest
+    defaults:
+      run:
+        working-directory: windows
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Rust (deux architectures)
+        run: |
+          rustup toolchain install stable --profile minimal
+          rustup target add aarch64-apple-darwin x86_64-apple-darwin
+
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            windows/target
+          key: macos-${{ hashFiles('windows/Cargo.lock') }}
+
+      - name: Tests
+        run: cargo test -p rafiq --locked
+
+      - name: rafiq-hook universel
+        run: |
+          cargo build --release --locked -p rafiq-hook --target aarch64-apple-darwin --target-dir target/hook
+          cargo build --release --locked -p rafiq-hook --target x86_64-apple-darwin --target-dir target/hook
+          mkdir -p target/hook/release
+          lipo -create -output target/hook/release/rafiq-hook \
+            target/hook/aarch64-apple-darwin/release/rafiq-hook \
+            target/hook/x86_64-apple-darwin/release/rafiq-hook
+
+      - name: Rafiq.app + .dmg
+        working-directory: windows/rafiq
+        run: npx --yes @tauri-apps/cli@2 build --target universal-apple-darwin --bundles app,dmg --config tauri.macos.bundle.conf.json
+
+      - name: Nom du .dmg
+        id: dmg
+        run: |
+          src=$(ls target/universal-apple-darwin/release/bundle/dmg/*.dmg | head -1)
+          ver=$(grep -m1 '"version"' rafiq/tauri.conf.json | sed -E 's/.*"([0-9.]+)".*/\1/')
+          out="target/Rafiq_${ver}_macOS-universal.dmg"
+          cp "$src" "$out"
+          echo "path=windows/$out" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Rafiq-macOS
+          path: ${{ steps.dmg.outputs.path }}
+
+      - name: Joindre à la release
+        if: ${{ inputs.release_tag != '' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "${{ inputs.release_tag }}" "../${{ steps.dmg.outputs.path }}" --clobber

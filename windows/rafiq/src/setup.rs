@@ -76,12 +76,5 @@ pub fn open_link(url: String) {
     if !LINKS.contains(&url.as_str()) {
         return;
     }
-    let mut cmd = std::process::Command::new("cmd");
-    cmd.args(["/C", "start", "", &url]);
-    #[cfg(windows)]
-    {
-        use std::os::windows::process::CommandExt;
-        cmd.creation_flags(0x0800_0000);
-    }
-    let _ = cmd.spawn();
+    crate::platform::open_url(&url);
 }

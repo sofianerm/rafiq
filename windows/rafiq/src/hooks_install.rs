@@ -64,11 +64,7 @@ pub fn is_installed() -> bool {
 
 pub fn install() -> Result<String, String> {
     let path = settings_path().ok_or("cannot find the user directory")?;
-    let hook_exe = std::env::current_exe()
-        .map_err(|e| e.to_string())?
-        .parent()
-        .ok_or("cannot locate the program directory")?
-        .join("rafiq-hook.exe");
+    let hook_exe = crate::platform::hook_exe().ok_or("cannot locate the program directory")?;
     if !hook_exe.exists() {
         return Err(format!("missing {}", hook_exe.display()));
     }

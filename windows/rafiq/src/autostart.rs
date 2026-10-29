@@ -2,6 +2,15 @@
 //! The command carries --silent: wait in the background, show no bar without sessions, appear when one starts.
 //! Implemented with reg.exe, so no new dependency.
 
+//! Sur macOS : un LaunchAgent (~/Library/LaunchAgents/com.sofianerm.rafiq.plist), voir `mac` plus bas.
+
+#[cfg(target_os = "macos")]
+pub use mac::{disable, enable, is_enabled};
+#[cfg(not(target_os = "macos"))]
+pub use win::{disable, enable, is_enabled};
+
+#[cfg(not(target_os = "macos"))]
+mod win {
 use std::process::Command;
 
 const RUN_KEY: &str = r"HKCU\Software\Microsoft\Windows\CurrentVersion\Run";
@@ -56,5 +65,57 @@ pub fn disable() -> Result<String, String> {
             }
         }
         None => Err("reg.exe failed to run".into()),
+    }
+}
+}
+
+#[cfg(target_os = "macos")]
+mod mac {
+    use std::path::PathBuf;
+
+    const LABEL: &str = "com.sofianerm.rafiq";
+
+    fn plist_path() -> Option<PathBuf> {
+        dirs::home_dir().map(|h| h.join("Library").join("LaunchAgents").join(format!("{LABEL}.plist")))
+    }
+
+    /// Caractères spéciaux du XML, pour un chemin d'app qui en contiendrait
+    fn xml(s: &str) -> String {
+        s.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;")
+    }
+
+    pub fn is_enabled() -> bool {
+        plist_path().map(|p| p.exists()).unwrap_or(false)
+    }
+
+    pub fn enable() -> Result<String, String> {
+        let exe = std::env::current_exe().map_err(|e| e.to_string())?;
+        let path = plist_path().ok_or("cannot find the home directory")?;
+        if let Some(dir) = path.parent() {
+            std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
+        }
+        let plist = format!(
+            r#"<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>{LABEL}</string>
+  <key>ProgramArguments</key>
+  <array><string>{}</string><string>--silent</string></array>
+  <key>RunAtLoad</key><true/>
+</dict>
+</plist>
+"#,
+            xml(&exe.display().to_string())
+        );
+        std::fs::write(&path, plist).map_err(|e| e.to_string())?;
+        Ok("start at sign-in enabled".into())
+    }
+
+    pub fn disable() -> Result<String, String> {
+        match plist_path() {
+            Some(p) if p.exists() => std::fs::remove_file(p).map(|_| "start at sign-in disabled".into()).map_err(|e| e.to_string()),
+            _ => Ok("start at sign-in was not enabled".into()),
+        }
     }
 }
