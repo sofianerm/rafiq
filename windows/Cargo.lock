@@ -3087,6 +3087,8 @@ dependencies = [
  "dirs 5.0.1",
  "native-tls",
  "notify",
+ "objc2-app-kit",
+ "objc2-foundation",
  "png 0.17.16",
  "rusqlite",
  "serde",

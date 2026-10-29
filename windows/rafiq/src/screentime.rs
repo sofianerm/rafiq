@@ -120,22 +120,73 @@ mod win {
     }
 }
 
+/// macOS : l'app au premier plan vient de NSWorkspace, l'inactivité de CoreGraphics.
+#[cfg(target_os = "macos")]
+#[allow(unused_unsafe)]
+mod mac {
+    use objc2_app_kit::NSWorkspace;
+
+    pub fn idle_secs() -> u64 {
+        #[link(name = "CoreGraphics", kind = "framework")]
+        extern "C" {
+            fn CGEventSourceSecondsSinceLastEventType(state: i32, event_type: u32) -> f64;
+        }
+        // kCGEventSourceStateCombinedSessionState, kCGAnyInputEventType
+        let s = unsafe { CGEventSourceSecondsSinceLastEventType(0, u32::MAX) };
+        if s.is_finite() && s > 0.0 { s as u64 } else { 0 }
+    }
+
+    /// (nom court de l'exécutable, nom affiché) de l'app au premier plan
+    pub fn front() -> Option<(String, String)> {
+        unsafe {
+            let app = NSWorkspace::sharedWorkspace().frontmostApplication()?;
+            let name = app.localizedName().map(|s| s.to_string());
+            let exe = app
+                .executableURL()
+                .and_then(|u| u.lastPathComponent())
+                .map(|s| s.to_string().to_lowercase());
+            let stem = exe.or_else(|| name.as_ref().map(|n| n.to_lowercase()))?;
+            Some((stem.clone(), name.unwrap_or(stem)))
+        }
+    }
+}
+
+/// L'app au premier plan : son nom court (la clé) et de quoi trouver son nom lisible
+#[cfg(windows)]
+fn front() -> Option<(String, String)> {
+    let path = win::exe_path(crate::focus::fg_pid())?;
+    let stem = std::path::Path::new(&path).file_stem()?.to_string_lossy().to_lowercase();
+    Some((stem, path))
+}
+#[cfg(target_os = "macos")]
+use mac::front;
+
+#[cfg(windows)]
+fn display_name(source: &str, stem: &str) -> String {
+    win::description(source).unwrap_or_else(|| stem.to_string())
+}
+#[cfg(target_os = "macos")]
+fn display_name(source: &str, _stem: &str) -> String {
+    source.to_string()
+}
+
+#[cfg(windows)]
+use win::idle_secs;
+#[cfg(target_os = "macos")]
+use mac::idle_secs;
+
 pub fn start(app: AppHandle) {
     *DATA.lock().unwrap() =
         Some(std::fs::read_to_string(store_path()).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or_default());
-    #[cfg(windows)]
+    #[cfg(any(windows, target_os = "macos"))]
     std::thread::spawn(move || {
         crate::activity::lower_thread_priority();
         let mut ticks = 0u64;
         loop {
             std::thread::sleep(Duration::from_secs(TICK_SECS));
             ticks += 1;
-            if win::idle_secs() < IDLE_SECS {
-                let path = win::exe_path(crate::focus::fg_pid());
-                let stem = path.as_deref().and_then(|p| {
-                    std::path::Path::new(p).file_stem().map(|s| s.to_string_lossy().to_lowercase())
-                });
-                if let (Some(path), Some(stem)) = (path, stem) {
+            if idle_secs() < IDLE_SECS {
+                if let Some((stem, source)) = front() {
                     if !IGNORED.contains(&stem.as_str()) {
                         let mut guard = DATA.lock().unwrap();
                         let d = guard.get_or_insert_with(Default::default);
@@ -143,7 +194,7 @@ pub fn start(app: AppHandle) {
                         let name = if d.names.contains_key(&stem) {
                             None
                         } else {
-                            Some(win::description(&path).unwrap_or_else(|| stem.clone()))
+                            Some(display_name(&source, &stem))
                         };
                         add(d, &today(), &stem, name, TICK_SECS);
                     }
