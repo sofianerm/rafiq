@@ -79,6 +79,7 @@ registerModule({
       if(s.busy) this.status={text:s.message,kind:'busy'};
       else if(s.ok!=null){
         if(s.origin==='hotkey'){ this.flash=s.ok?'✓':'!'; clearTimeout(this._f); this._f=setTimeout(()=>{ this.flash=null; ctx.update(); },4000); }
+        if(s.ok) ctx.invoke('ai_get').then(v=>{ this.v=v; ctx.update(); }).catch(()=>{}); // essais restants à jour
         this.status=s.ok?{text:s.origin==='hotkey'?'Sélection remplacée':'Copié · Ctrl+V pour coller',kind:'ok'}:{text:s.message,kind:'err'};
       }
       ctx.update();
@@ -105,7 +106,10 @@ registerModule({
     html+=`<div class="cl-row"><button class="cl-btn go" data-do="go"${this.busy?' disabled':''} title="${esc(v.action)} (Ctrl+Entrée)"><span>✦ ${esc(v.action)}</span></button>`
       +`<button class="cl-btn icon" data-do="clip"${this.busy?' disabled':''} title="Appliquer au texte du presse-papier" aria-label="Presse-papier">${CLIP_ICON}</button>`
       +(this.prev!=null&&!this.busy?`<button class="cl-btn icon ghost" data-do="undo" title="Annuler : revenir au texte d'avant" aria-label="Annuler">${UNDO_ICON}</button>`:'')+`</div>`;
-    const st=this.status||(p&&!p.has_key?{text:`Ajoute une clé API ${p.name} dans les réglages`,kind:'err'}:null);
+    // Sans clé : l'essai gratuit tant qu'il en reste, sinon on demande une clé
+    const trial=v.trial;
+    const st=this.status||(p&&!p.has_key?(trial>0?{text:`${trial} essai${trial>1?'s':''} gratuit${trial>1?'s':''} restant${trial>1?'s':''}`,kind:'ok'}
+      :{text:trial===0?'Essais gratuits utilisés · ajoute ta clé (Réglages)':`Ajoute une clé API ${p.name} dans les réglages`,kind:'err'}):null);
     html+=`<div class="cl-status ${st?st.kind:''}">${st?esc(st.text):esc(p?`${p.name} · ${p.model}`:'')}</div>`;
     html+=`<div class="cl-hint"><span title="Sur un texte sélectionné, dans n'importe quelle app"><kbd>${esc(v.hotkey||'—')}</kbd>${v.hotkey&&!v.hotkey_ok?'<span style="color:#FF8A70">indisponible</span>':'sur une sélection'}</span><button class="cl-btn ghost" data-do="settings">${this.settings?'Fermer':'Réglages'}</button></div>`;
     if(this.settings) html+=this.renderSettings();

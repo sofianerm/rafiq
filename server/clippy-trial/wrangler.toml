@@ -1,0 +1,20 @@
+# L'essai gratuit de Clippy (voir src/index.js). Déploiement : README.md de ce dossier.
+name = "rafiq-clippy-trial"
+main = "src/index.js"
+compatibility_date = "2025-09-01"
+workers_dev = true
+
+# Les compteurs d'essais. L'id vient de « npx wrangler kv namespace create TRIAL ».
+[[kv_namespaces]]
+binding = "TRIAL"
+id = "REMPLACER_PAR_L_ID_DU_KV"
+
+# Les plafonds, modifiables ici puis « npx wrangler deploy »
+[vars]
+PER_INSTALL = "5"    # essais offerts par installation, à vie
+PER_IP_DAY = "10"    # par adresse IP et par jour
+GLOBAL_DAY = "200"   # pour tout le monde et par jour
+MAX_CHARS = "4000"   # longueur max du texte envoyé
+MODEL = "deepseek-v4-pro"
+
+# Le secret DEEPSEEK_API_KEY n'est jamais ici : « npx wrangler secret put DEEPSEEK_API_KEY »

@@ -101,6 +101,33 @@ pub struct AiConfig {
     pub hotkey: String,
     #[serde(default = "yes")]
     pub auto_paste: bool,
+    /// Identifiant aléatoire de cette installation, pour compter les essais gratuits (rien d'autre)
+    #[serde(default)]
+    pub install_id: String,
+    /// L'essai gratuit (server/clippy-trial) : vide = pas d'essai, il faut sa propre clé
+    #[serde(default = "default_trial_url")]
+    pub trial_url: String,
+    /// Les essais restants, tels que le serveur les a annoncés la dernière fois
+    #[serde(default)]
+    pub trial_left: Option<u32>,
+}
+
+/// Le Worker Cloudflare de l'essai gratuit, une fois déployé (pas un secret : la clé reste chez Cloudflare)
+const TRIAL_URL: &str = "";
+
+fn default_trial_url() -> String {
+    TRIAL_URL.into()
+}
+
+/// 128 bits aléatoires en hexadécimal, sans dépendance : RandomState est semé au hasard par le système
+fn random_id() -> String {
+    use std::hash::{BuildHasher, Hasher};
+    let part = || {
+        let mut h = std::collections::hash_map::RandomState::new().build_hasher();
+        h.write_u128(std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_nanos()).unwrap_or(0));
+        h.finish()
+    };
+    format!("{:016x}{:016x}", part(), part())
 }
 
 fn default_provider() -> String {
@@ -167,11 +194,19 @@ fn store_path() -> PathBuf {
 fn cfg() -> AiConfig {
     let mut g = CFG.lock().unwrap();
     g.get_or_insert_with(|| {
-        std::fs::read_to_string(store_path())
+        let mut c = std::fs::read_to_string(store_path())
             .ok()
             .and_then(|t| serde_json::from_str::<AiConfig>(&t).ok())
             .unwrap_or_default()
-            .normalized()
+            .normalized();
+        // Tiré une fois, au premier lancement, et gardé
+        if c.install_id.is_empty() {
+            c.install_id = random_id();
+            if let Ok(t) = serde_json::to_string_pretty(&c) {
+                let _ = std::fs::write(store_path(), t);
+            }
+        }
+        c
     })
     .clone()
 }
@@ -204,6 +239,15 @@ pub struct AiView {
     hotkey_ok: bool,
     auto_paste: bool,
     busy: bool,
+    /// Les essais gratuits restants quand Clippy tourne sur l'essai (pas de clé pour ce fournisseur)
+    trial: Option<u32>,
+    /// Un essai gratuit existe (serveur configuré)
+    trial_available: bool,
+}
+
+/// Sans clé à soi, Clippy passe par l'essai gratuit, s'il y en a un
+fn on_trial(c: &AiConfig) -> bool {
+    c.key(&c.provider).is_empty() && !c.trial_url.trim().is_empty()
 }
 
 fn view() -> AiView {
@@ -220,6 +264,8 @@ fn view() -> AiView {
         hotkey_ok: HOTKEY_OK.load(Ordering::Relaxed),
         auto_paste: c.auto_paste,
         busy: BUSY.load(Ordering::Relaxed),
+        trial: if on_trial(&c) { Some(c.trial_left.unwrap_or(5)) } else { None },
+        trial_available: !c.trial_url.trim().is_empty(),
     }
 }
 
@@ -269,9 +315,36 @@ fn describe(e: ureq::Error, name: &str) -> String {
     }
 }
 
+/// Une réécriture par l'essai gratuit : le serveur garde la clé et compte les essais
+fn trial_chat(c: &AiConfig, text: &str) -> Result<String, String> {
+    let agent = ureq::AgentBuilder::new().timeout(Duration::from_secs(45)).build();
+    let body = serde_json::json!({ "install_id": c.install_id, "prompt": c.current_action().prompt, "text": text });
+    let resp = agent
+        .post(c.trial_url.trim())
+        .set("User-Agent", concat!("Rafiq/", env!("CARGO_PKG_VERSION")))
+        .send_json(body);
+    let (status, v): (u16, serde_json::Value) = match resp {
+        Ok(r) => (r.status(), r.into_json().unwrap_or_default()),
+        Err(ureq::Error::Status(code, r)) => (code, r.into_json().unwrap_or_default()),
+        Err(_) => return Err("Impossible de joindre l'essai gratuit (connexion ?)".into()),
+    };
+    if let Some(left) = v["remaining"].as_u64() {
+        let mut all = cfg();
+        all.trial_left = Some(left as u32);
+        save(all);
+    }
+    match v["output"].as_str().map(str::trim).filter(|o| !o.is_empty()) {
+        Some(out) if status == 200 => Ok(out.to_string()),
+        _ => Err(v["error"].as_str().map(String::from).unwrap_or_else(|| format!("Essai gratuit indisponible ({status})"))),
+    }
+}
+
 fn chat(c: &AiConfig, text: &str) -> Result<String, String> {
     let p = info(&c.provider);
     let key = c.key(p.id);
+    if key.is_empty() && on_trial(c) {
+        return trial_chat(c, text);
+    }
     if key.is_empty() {
         return Err(format!("Ajoute une clé API {} dans les réglages", p.name));
     }
@@ -657,6 +730,28 @@ pub fn ai_focus(app: AppHandle, on: bool) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn install_ids_are_random_hex() {
+        let (a, b) = (random_id(), random_id());
+        assert_eq!(a.len(), 32);
+        assert!(a.chars().all(|c| c.is_ascii_hexdigit()));
+        assert_ne!(a, b);
+    }
+
+    #[test]
+    fn trial_only_without_a_key_and_with_a_server() {
+        let mut c = AiConfig::default().normalized();
+        c.trial_url = "https://example.workers.dev/v1/clippy".into();
+        if std::env::var(info(&c.provider).env).is_err() {
+            assert!(on_trial(&c));
+        }
+        c.providers.get_mut(&c.provider.clone()).unwrap().api_key = "sk-test".into();
+        assert!(!on_trial(&c));
+        c.trial_url.clear();
+        c.providers.get_mut(&c.provider.clone()).unwrap().api_key.clear();
+        assert!(!on_trial(&c));
+    }
 
     #[test]
     fn missing_fields_get_defaults() {

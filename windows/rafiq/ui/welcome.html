@@ -253,7 +253,7 @@ const SCREENS = [
   },
   { // 5 — Clippy
     html: () => `<h1>Tu veux un assistant pour réécrire tes textes ?</h1>
-      <p>Sélectionne un texte n’importe où, Ctrl+Alt+C : je le corrige, le traduis ou le reformule, et je le recolle à sa place. Il me faut une IA et ta propre clé d’API (souvent quelques centimes par mois).</p>
+      <p>Sélectionne un texte n’importe où, Ctrl+Alt+C : je le corrige, le traduis ou le reformule, et je le recolle à sa place. ${ai && ai.trial_available ? 'Tu as 5 essais offerts pour découvrir, ou mets ta propre clé d’API (souvent quelques centimes par mois).' : 'Il me faut une IA et ta propre clé d’API (souvent quelques centimes par mois).'}</p>
       <div class="yesno" id="cl"><button data-v="1" class="${ans.clippy ? 'on' : ''}">Oui, je veux Clippy</button><button data-v="0" class="${ans.clippy ? '' : 'on'}">Plus tard</button></div>
       <div id="clMore"></div>`,
     mount: el => {
@@ -264,6 +264,7 @@ const SCREENS = [
         const t = clip.test;
         box.innerHTML = '<p style="margin-bottom:6px">Quelle IA ?</p>'
           + '<select id="clProv">' + (ai ? ai.providers : []).map(x => '<option value="' + esc(x.id) + '"' + (x.id === clip.provider ? ' selected' : '') + '>' + esc(x.name) + '</option>').join('') + '</select>'
+          + (ai && ai.trial_available && !(pv && pv.has_key) ? '<p class="note" style="margin:8px 0;color:var(--green)">Sans clé, tu as 5 essais offerts. Tu peux en mettre une maintenant ou plus tard.</p>' : '')
           + '<p class="note" style="margin:8px 0">Pas encore de clé ? <span class="lk" data-link="' + esc(KEY_PAGES[clip.provider] || '') + '">Crée-la chez ' + esc(pv ? pv.name : clip.provider) + '</span>, puis colle-la ici.</p>'
           + '<div style="display:flex;gap:8px"><input id="clKey" type="password" autocomplete="off" placeholder="' + (pv && pv.has_key && !clip.key ? 'Clé déjà enregistrée' : 'Ta clé d’API') + '" value="' + esc(clip.key) + '"><button class="mini" id="clTest">Tester</button></div>'
           + '<p class="note" id="clRes" style="color:' + (t ? (t.ok ? 'var(--green)' : '#FF8A70') : 'var(--text3)') + '">' + esc(t ? t.text : 'Ta clé reste sur ce PC.') + '</p>';
@@ -373,7 +374,7 @@ function closeMe(){
 /* Tout est écrit ici, d'un coup : le profil, puis les modules (l'ordre déjà choisi est gardé) */
 function clippyOn(){
   const pv = ai && ai.providers.find(x => x.id === clip.provider);
-  return ans.clippy && (!!clip.key || !!(pv && pv.has_key));
+  return ans.clippy && (!!clip.key || !!(pv && pv.has_key) || !!(ai && ai.trial_available));
 }
 async function finish(){
   const next = document.getElementById('next');
