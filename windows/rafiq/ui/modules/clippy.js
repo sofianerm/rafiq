@@ -47,7 +47,7 @@ const STYLE=`
 .cl-set label.chk{grid-column:1/-1;display:flex;gap:6px;align-items:center;cursor:pointer}
 `;
 // Les libellés de tags tiennent sur une demi-largeur : « Traduire en anglais » devient « ⇄ Anglais »
-const chipLabel=n=>{ const m=/^traduire en (.+)$/i.exec(n); return m?'⇄ '+m[1].charAt(0).toUpperCase()+m[1].slice(1):n; };
+const chipLabel=n=>{ const m=/^(?:traduire en|translate (?:to|into)) (.+)$/i.exec(n); return m?'⇄ '+m[1].charAt(0).toUpperCase()+m[1].slice(1):n; };
 const CLIP_ICON='<svg viewBox="0 0 24 24"><rect x="8" y="3" width="8" height="4" rx="1.5"/><path d="M16 5h1.5A1.5 1.5 0 0 1 19 6.5v13a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 5 19.5v-13A1.5 1.5 0 0 1 6.5 5H8"/></svg>';
 const UNDO_ICON='<svg viewBox="0 0 24 24"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>';
 const SPARK='<svg viewBox="0 0 24 24"><path d="M12 1.5c.6 5.3 3.4 8.6 9.5 10.5-6.1 1.9-8.9 5.2-9.5 10.5-.6-5.3-3.4-8.6-9.5-10.5C8.6 10.1 11.4 6.8 12 1.5z"/><path d="M19.5 1.5c.2 1.6 1 2.5 2.5 3-1.5.5-2.3 1.4-2.5 3-.2-1.6-1-2.5-2.5-3 1.5-.5 2.3-1.4 2.5-3z"/></svg>';
@@ -80,7 +80,7 @@ registerModule({
       else if(s.ok!=null){
         if(s.origin==='hotkey'){ this.flash=s.ok?'✓':'!'; clearTimeout(this._f); this._f=setTimeout(()=>{ this.flash=null; ctx.update(); },4000); }
         if(s.ok) ctx.invoke('ai_get').then(v=>{ this.v=v; ctx.update(); }).catch(()=>{}); // essais restants à jour
-        this.status=s.ok?{text:s.origin==='hotkey'?'Sélection remplacée':'Copié · Ctrl+V pour coller',kind:'ok'}:{text:s.message,kind:'err'};
+        this.status=s.ok?{text:s.origin==='hotkey'?LT('Sélection remplacée','Selection replaced'):LT('Copié · Ctrl+V pour coller','Copied · Ctrl+V to paste'),kind:'ok'}:{text:s.message,kind:'err'};
       }
       ctx.update();
     }).catch(()=>{});
@@ -99,19 +99,19 @@ registerModule({
 
   render(){
     const esc=this.ctx.esc, v=this.v;
-    if(!v) return `<div class="c-note">Chargement…</div>`;
+    if(!v) return `<div class="c-note">${LT('Chargement…','Loading…')}</div>`;
     const p=this.provider();
     let html=`<div class="cl-chips">`+v.actions.map(a=>`<span class="cl-chip${a.name===v.action?' on':''}" data-action="${esc(a.name)}" title="${esc(a.name)} — ${esc(a.prompt.slice(0,160))}…">${esc(chipLabel(a.name))}</span>`).join('')+`</div>`;
-    html+=`<textarea class="cl-text" data-f="text" spellcheck="false" placeholder="Colle ou tape un texte…  Ctrl+Entrée pour appliquer">${esc(this.draft)}</textarea>`;
-    html+=`<div class="cl-row"><button class="cl-btn go" data-do="go"${this.busy?' disabled':''} title="${esc(v.action)} (Ctrl+Entrée)"><span>✦ ${esc(v.action)}</span></button>`
-      +`<button class="cl-btn icon" data-do="clip"${this.busy?' disabled':''} title="Appliquer au texte du presse-papier" aria-label="Presse-papier">${CLIP_ICON}</button>`
-      +(this.prev!=null&&!this.busy?`<button class="cl-btn icon ghost" data-do="undo" title="Annuler : revenir au texte d'avant" aria-label="Annuler">${UNDO_ICON}</button>`:'')+`</div>`;
+    html+=`<textarea class="cl-text" data-f="text" spellcheck="false" placeholder="${LT('Colle ou tape un texte…  Ctrl+Entrée pour appliquer','Paste or type some text…  Ctrl+Enter to apply')}">${esc(this.draft)}</textarea>`;
+    html+=`<div class="cl-row"><button class="cl-btn go" data-do="go"${this.busy?' disabled':''} title="${esc(v.action)} (${LT('Ctrl+Entrée','Ctrl+Enter')})"><span>✦ ${esc(v.action)}</span></button>`
+      +`<button class="cl-btn icon" data-do="clip"${this.busy?' disabled':''} title="${LT('Appliquer au texte du presse-papier','Apply to the clipboard text')}" aria-label="${LT('Presse-papier','Clipboard')}">${CLIP_ICON}</button>`
+      +(this.prev!=null&&!this.busy?`<button class="cl-btn icon ghost" data-do="undo" title="${LT("Annuler : revenir au texte d'avant",'Undo: back to the previous text')}" aria-label="${LT('Annuler','Undo')}">${UNDO_ICON}</button>`:'')+`</div>`;
     // Sans clé : l'essai gratuit tant qu'il en reste, sinon on demande une clé
     const trial=v.trial;
-    const st=this.status||(p&&!p.has_key?(trial>0?{text:`${trial} essai${trial>1?'s':''} gratuit${trial>1?'s':''} restant${trial>1?'s':''}`,kind:'ok'}
-      :{text:trial===0?'Essais gratuits utilisés · ajoute ta clé (Réglages)':`Ajoute une clé API ${p.name} dans les réglages`,kind:'err'}):null);
+    const st=this.status||(p&&!p.has_key?(trial>0?{text:LT(`${trial} essai${trial>1?'s':''} gratuit${trial>1?'s':''} restant${trial>1?'s':''}`,`${trial} free ${trial>1?'tries':'try'} left`),kind:'ok'}
+      :{text:trial===0?LT('Essais gratuits utilisés · ajoute ta clé (Réglages)','Free tries used · add your key (Settings)'):LT(`Ajoute une clé API ${p.name} dans les réglages`,`Add a ${p.name} API key in the settings`),kind:'err'}):null);
     html+=`<div class="cl-status ${st?st.kind:''}">${st?esc(st.text):esc(p?`${p.name} · ${p.model}`:'')}</div>`;
-    html+=`<div class="cl-hint"><span title="Sur un texte sélectionné, dans n'importe quelle app"><kbd>${esc(v.hotkey||'—')}</kbd>${v.hotkey&&!v.hotkey_ok?'<span style="color:#FF8A70">indisponible</span>':'sur une sélection'}</span><button class="cl-btn ghost" data-do="settings">${this.settings?'Fermer':'Réglages'}</button></div>`;
+    html+=`<div class="cl-hint"><span title="${LT("Sur un texte sélectionné, dans n'importe quelle app",'On selected text, in any app')}"><kbd>${esc(v.hotkey||'—')}</kbd>${v.hotkey&&!v.hotkey_ok?'<span style="color:#FF8A70">'+LT('indisponible','unavailable')+'</span>':LT('sur une sélection','on a selection')}</span><button class="cl-btn ghost" data-do="settings">${this.settings?LT('Fermer','Close'):LT('Réglages','Settings')}</button></div>`;
     if(this.settings) html+=this.renderSettings();
     return html;
   },
@@ -121,12 +121,12 @@ registerModule({
     const f=this.form||(this.form={provider:v.provider,model:this.provider().model,key:'',hotkey:v.hotkey,auto:v.auto_paste,msg:null});
     const p=v.providers.find(x=>x.id===f.provider)||v.providers[0];
     return `<div class="cl-set">`
-      +`<span>Fournisseur</span><select data-f="provider">${v.providers.map(x=>`<option value="${x.id}"${x.id===f.provider?' selected':''}>${esc(x.name)}</option>`).join('')}</select>`
-      +`<span>Modèle</span><div class="model">${this.modelField(f,p)}<button class="ref" data-do="models" title="Recharger la liste depuis ${esc(p.name)}">↻</button></div>`+this.modelNote(f)
-      +`<span>Clé API</span><input data-f="key" type="password" value="${esc(f.key)}" placeholder="${p.has_key?'•••••• enregistrée':'Colle ta clé'}">`
-      +`<span>Raccourci</span><input data-f="hotkey" value="${esc(f.hotkey)}" placeholder="Ctrl+Alt+C">`
-      +`<label class="chk"><input type="checkbox" data-f="auto"${f.auto?' checked':''}> Coller le résultat à la place de la sélection</label>`
-      +`<div class="full"><button class="cl-btn go" data-do="save">Enregistrer</button><span class="cl-status ${f.msg?f.msg.kind:''}" style="margin:0">${f.msg?esc(f.msg.text):''}</span></div>`
+      +`<span>${LT('Fournisseur','Provider')}</span><select data-f="provider">${v.providers.map(x=>`<option value="${x.id}"${x.id===f.provider?' selected':''}>${esc(x.name)}</option>`).join('')}</select>`
+      +`<span>${LT('Modèle','Model')}</span><div class="model">${this.modelField(f,p)}<button class="ref" data-do="models" title="${LT('Recharger la liste depuis','Reload the list from')} ${esc(p.name)}">↻</button></div>`+this.modelNote(f)
+      +`<span>${LT('Clé API','API key')}</span><input data-f="key" type="password" value="${esc(f.key)}" placeholder="${p.has_key?LT('•••••• enregistrée','•••••• saved'):LT('Colle ta clé','Paste your key')}">`
+      +`<span>${LT('Raccourci','Shortcut')}</span><input data-f="hotkey" value="${esc(f.hotkey)}" placeholder="Ctrl+Alt+C">`
+      +`<label class="chk"><input type="checkbox" data-f="auto"${f.auto?' checked':''}> ${LT('Coller le résultat à la place de la sélection','Paste the result over the selection')}</label>`
+      +`<div class="full"><button class="cl-btn go" data-do="save">${LT('Enregistrer','Save')}</button><span class="cl-status ${f.msg?f.msg.kind:''}" style="margin:0">${f.msg?esc(f.msg.text):''}</span></div>`
       +`</div>`;
   },
 
@@ -135,17 +135,17 @@ registerModule({
     const esc=this.ctx.esc, m=this.models[f.provider];
     if(m&&m.list){
       const opts=m.list.includes(f.model)?m.list:[f.model,...m.list];
-      return `<select data-f="model">${opts.map(id=>`<option value="${esc(id)}"${id===f.model?' selected':''}>${esc(id)}${m.list.includes(id)?'':' (indisponible)'}</option>`).join('')}</select>`;
+      return `<select data-f="model">${opts.map(id=>`<option value="${esc(id)}"${id===f.model?' selected':''}>${esc(id)}${m.list.includes(id)?'':LT(' (indisponible)',' (unavailable)')}</option>`).join('')}</select>`;
     }
     return `<input data-f="model" list="cl-models" value="${esc(f.model)}"><datalist id="cl-models">${p.models.map(x=>`<option value="${esc(x)}">`).join('')}</datalist>`;
   },
   modelNote(f){
     const esc=this.ctx.esc, m=this.models[f.provider];
     if(!m) return '';
-    if(m.loading) return `<span class="note">Chargement des modèles…</span>`;
+    if(m.loading) return `<span class="note">${LT('Chargement des modèles…','Loading models…')}</span>`;
     if(m.error) return `<span class="note err">${esc(m.error)}</span>`;
-    if(m.list&&!m.list.includes(f.model)) return `<span class="note err">Ce modèle n'est plus proposé : choisis-en un autre</span>`;
-    return `<span class="note">${m.list.length} modèle${m.list.length>1?'s':''} disponible${m.list.length>1?'s':''}</span>`;
+    if(m.list&&!m.list.includes(f.model)) return `<span class="note err">${LT("Ce modèle n'est plus proposé : choisis-en un autre",'This model is no longer offered: pick another one')}</span>`;
+    return `<span class="note">${LT(`${m.list.length} modèle${m.list.length>1?'s':''} disponible${m.list.length>1?'s':''}`,`${m.list.length} model${m.list.length>1?'s':''} available`)}</span>`;
   },
   async loadModels(provider,key){
     this.models[provider]={loading:true};
@@ -161,7 +161,7 @@ registerModule({
 
   async go(){
     const text=this.draft.trim();
-    if(!text){ this.status={text:'Colle d\'abord un texte',kind:'err'}; return this.ctx.update(); }
+    if(!text){ this.status={text:LT("Colle d'abord un texte",'Paste some text first'),kind:'err'}; return this.ctx.update(); }
     const before=this.draft;
     try{ const out=await this.ctx.invoke('ai_run',{text}); this.prev=before; this.draft=out; }
     catch(e){ this.status={text:String(e),kind:'err'}; }
@@ -178,7 +178,7 @@ registerModule({
     const f=this.form;
     try{
       this.v=await this.ctx.invoke('ai_save',{s:{provider:f.provider,model:f.model,api_key:f.key?f.key:null,hotkey:f.hotkey,auto_paste:f.auto}});
-      this.form=null; this.settings=false; this.status={text:'Réglages enregistrés',kind:'ok'};
+      this.form=null; this.settings=false; this.status={text:LT('Réglages enregistrés','Settings saved'),kind:'ok'};
       this.release();
     }catch(e){ f.msg={text:String(e),kind:'err'}; }
     this.ctx.update();

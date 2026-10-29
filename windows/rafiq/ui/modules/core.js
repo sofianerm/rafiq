@@ -41,3 +41,9 @@ function bindSourceLinks(el,ctx){
     ev.stopPropagation(); ctx.invoke('open_link',{url:a.dataset.link}).catch(()=>{});
   }));
 }
+
+// La langue de l'app, « fr » ou « en » : celle de la page hôte (uiLang de notch.html ou settings.html).
+// Les modules écrivent leurs textes dans les deux langues : LT('Prière', 'Prayer').
+function moduleLang(){ try { return uiLang === 'fr' ? 'fr' : 'en'; } catch(e) { return 'fr'; } }
+function LT(fr, en){ return moduleLang() === 'fr' ? fr : en; }
+function moduleLocale(){ return LT('fr-FR', 'en-GB'); }

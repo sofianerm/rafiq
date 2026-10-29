@@ -14,7 +14,7 @@ const MODE_COLORS={TRAM:'#F7A600',SUBWAY:'#7A3E9D',BUS:'#0078BF',COACH:'#0078BF'
 
 // L'API écrit +0200 : Date.parse veut +02:00
 const ms=v=>{ if(!v) return null; const t=Date.parse(String(v).replace(/([+-]\d\d)(\d\d)$/,'$1:$2')); return Number.isFinite(t)?t:null; };
-const hhmm=t=>new Date(t).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});
+const hhmm=t=>new Date(t).toLocaleTimeString(moduleLocale(),{hour:'2-digit',minute:'2-digit'});
 const minutes=d=>Math.max(0,Math.floor(d/60000));
 function modeColor(mode){ return MODE_COLORS[mode]||(/RAIL|TRAIN|LONG_DISTANCE|HIGHSPEED/.test(mode)?'#E3000F':'#0078BF'); }
 function lineColor(cat,num){
@@ -39,8 +39,8 @@ const STYLE=`
 
 registerModule({
   id:'tpg',
-  name:'Transports',
-  title:'Départs',
+  get name(){ return LT('Transports','Transport'); },
+  get title(){ return LT('Départs','Departures')+(this.stops.length?' · '+this.stops[0].name:''); },
   glyph:'T',
   icon:'<svg viewBox="0 0 24 24"><path d="M8 2h8v2h-3v2h2.5A3.5 3.5 0 0 1 19 9.5v7a2.5 2.5 0 0 1-1.6 2.3L19 21v1h-2.2l-1.5-2H8.7l-1.5 2H5v-1l1.6-2.2A2.5 2.5 0 0 1 5 16.5v-7A3.5 3.5 0 0 1 8.5 6H11V4H8zM7.5 9a.5.5 0 0 0-.5.5V13h10V9.5a.5.5 0 0 0-.5-.5zM8 15.2a1.2 1.2 0 1 0 0 2.4 1.2 1.2 0 0 0 0-2.4zm8 0a1.2 1.2 0 1 0 0 2.4 1.2 1.2 0 0 0 0-2.4z"/></svg>',
   boards:{},   // id → [{color,num,to,at,delay,platform}]
@@ -56,7 +56,6 @@ registerModule({
       if(!s) return;
       this.source=s.transit_source==='opendata'?'opendata':'transitous';
       this.stops=Array.isArray(s.transit_stops)?s.transit_stops:[];
-      this.title=this.stops.length?'Départs · '+this.stops[0].name:'Départs';
       this.boards={}; this.fetchedAt=0; this.load();
     };
     ctx.listen('setup',e=>take(e.payload)).catch(()=>{});
@@ -112,22 +111,22 @@ registerModule({
 
   render(){
     const esc=this.ctx.esc;
-    if(!this.stops.length) return `<div class="c-note">Choisis tes arrêts dans les Settings → Profil.</div>`;
+    if(!this.stops.length) return `<div class="c-note">${LT('Choisis tes arrêts dans les Settings → Profil.','Pick your stops in Settings → Profile.')}</div>`;
     let html='';
     for(const s of this.stops){
       html+=`<div class="tp-st">${esc(s.name)}<small>${esc(s.sub)}</small></div>`;
       const deps=this.upcoming(s.id).slice(0,ROWS);
-      if(!deps.length){ html+=`<div class="c-sub">${this.fetchedAt?'Aucun départ':'Chargement…'}</div>`; continue; }
+      if(!deps.length){ html+=`<div class="c-sub">${this.fetchedAt?LT('Aucun départ','No departures'):LT('Chargement…','Loading…')}</div>`; continue; }
       for(const d of deps){
         const m=minutes(d.at-Date.now());
-        const inTxt=m<1?'maintenant':m<60?`${m} min`:hhmm(d.at);
+        const inTxt=m<1?LT('maintenant','now'):m<60?`${m} min`:hhmm(d.at);
         html+=`<div class="tp-row"><span class="tp-line" style="background:${esc(d.color)}">${esc(d.num)}</span>`
-          +`<span class="tp-to">${esc(d.to)}${d.platform?`<small>${esc(/^\d+$/.test(d.platform)?'voie '+d.platform:'quai '+d.platform)}</small>`:''}</span>`
+          +`<span class="tp-to">${esc(d.to)}${d.platform?`<small>${esc(/^\d+$/.test(d.platform)?LT('voie ','track ')+d.platform:LT('quai ','stop ')+d.platform)}</small>`:''}</span>`
           +`<span class="tp-in${m<1?' now':''}">${inTxt}${d.delay>0?`<span class="tp-late">+${d.delay}</span>`:''}</span></div>`;
       }
     }
-    if(this.error) html+=`<div class="c-sub" style="margin-top:8px">Erreur : ${esc(this.error)}</div>`;
-    if(this.source==='transitous') html+=`<div class="c-sub src-link">Données : <span data-link="https://transitous.org/sources/">Transitous et ses sources</span> · <span data-link="https://www.openstreetmap.org/copyright">© OpenStreetMap</span></div>`;
+    if(this.error) html+=`<div class="c-sub" style="margin-top:8px">${LT('Erreur','Error')} : ${esc(this.error)}</div>`;
+    if(this.source==='transitous') html+=`<div class="c-sub src-link">${LT('Données','Data')} : <span data-link="https://transitous.org/sources/">${LT('Transitous et ses sources','Transitous and its sources')}</span> · <span data-link="https://www.openstreetmap.org/copyright">© OpenStreetMap</span></div>`;
     return html;
   },
 

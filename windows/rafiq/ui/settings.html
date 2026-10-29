@@ -1170,7 +1170,7 @@ call('get_setup', undefined, null).then(v => {
   setup = v;
   renderProfile();
 });
-{ const all = renderAll; renderAll = function(){ all(); renderProfile(); }; }
+{ const all = renderAll; renderAll = function(){ all(); renderProfile(); renderModules(); }; }
 try { window.__TAURI__.event.listen('notch_modules', e => { if(Array.isArray(e.payload)){ modulePrefs = e.payload; renderModules(); } }); } catch(e) { /* relu à la prochaine ouverture */ }
 try { window.__TAURI__.event.listen('setup', e => { if(e.payload){ setup = e.payload; renderProfile(); } }); } catch(e) { /* relu à la prochaine ouverture */ }
 </script>
