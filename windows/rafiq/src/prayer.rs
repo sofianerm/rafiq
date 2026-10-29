@@ -173,7 +173,7 @@ impl Source {
         match self {
             Source::Masjidbox(slug) => read_once(slug),
             Source::Aladhan { lat, lon, method, city } => read_aladhan(*lat, *lon, *method, city, &self.key()),
-            Source::Missing => Err("choisis ta ville dans les Settings → Profil".into()),
+            Source::Missing => Err(crate::i18n::l("choisis ta ville dans les Settings → Profil", "pick your city in Settings → Profile").into()),
         }
     }
 }
@@ -251,7 +251,7 @@ fn read_aladhan(lat: f64, lon: f64, method: u32, city: &str, key: &str) -> Resul
     let to = later.format("%Y-%m-%d").to_string();
     days.retain(|d| d["date"].as_str().and_then(|s| s.get(..10)).is_some_and(|s| s >= from.as_str() && s <= to.as_str()));
     if days.is_empty() {
-        return Err("Aladhan n'a renvoyé aucun horaire".into());
+        return Err(crate::i18n::l("Aladhan n'a renvoyé aucun horaire", "Aladhan sent no times").into());
     }
     Ok(PrayerSnapshot {
         status: "ok".into(),
@@ -325,7 +325,11 @@ pub fn start(app: AppHandle) {
 const REMIND_BEFORE_MS: i64 = 5 * 60 * 1000;
 /// A toast fires only close to its time, so starting the app mid-afternoon does not replay the morning
 const FIRE_WINDOW_MS: i64 = 3 * 60 * 1000;
-const PRAYERS: [(&str, &str); 5] = [("fajr", "Fajr"), ("dhuhr", "Dohr"), ("asr", "Asr"), ("maghrib", "Maghrib"), ("isha", "Icha")];
+/// Les cinq prières et leur nom dans la langue de l'app
+fn prayers() -> [(&'static str, &'static str); 5] {
+    let fr = crate::i18n::is_fr();
+    [("fajr", "Fajr"), ("dhuhr", if fr { "Dohr" } else { "Dhuhr" }), ("asr", "Asr"), ("maghrib", "Maghrib"), ("isha", if fr { "Icha" } else { "Isha" })]
+}
 
 static FIRED: Mutex<Vec<String>> = Mutex::new(Vec::new());
 /// "YYYY-MM-DD:dhuhr" for each prayer ticked as prayed; None until first read from disk
@@ -387,7 +391,7 @@ fn alerts(days: &[serde_json::Value]) -> Vec<Alert> {
     let mut out = Vec::new();
     for (i, d) in days.iter().enumerate() {
         let date = d["date"].as_str().and_then(|s| s.get(..10)).unwrap_or("").to_string();
-        for (k, name) in PRAYERS {
+        for (k, name) in prayers() {
             let Some(at) = ts(&d[k]) else { continue };
             let iqama = ts(&d["iqamah"][k]).map(|t| format!(" · iqama {}", clock(t))).unwrap_or_default();
             out.push(Alert {
@@ -398,12 +402,12 @@ fn alerts(days: &[serde_json::Value]) -> Vec<Alert> {
                 prayed_key: None,
             });
             let end = match k {
-                "fajr" => ts(&d["sunrise"]).map(|t| (t, "Chourouq")),
+                "fajr" => ts(&d["sunrise"]).map(|t| (t, crate::i18n::l("Chourouq", "Sunrise"))),
                 "dhuhr" => ts(&d["asr"]).map(|t| (t, "Asr")),
                 "asr" => ts(&d["maghrib"]).map(|t| (t, "Maghrib")),
-                "maghrib" => ts(&d["isha"]).map(|t| (t, "Icha")),
+                "maghrib" => ts(&d["isha"]).map(|t| (t, crate::i18n::l("Icha", "Isha"))),
                 _ => match (ts(&d["maghrib"]), days.get(i + 1).and_then(|n| ts(&n["fajr"]))) {
-                    (Some(m), Some(f)) => Some((m + (f - m) / 2, "Minuit")),
+                    (Some(m), Some(f)) => Some((m + (f - m) / 2, crate::i18n::l("Minuit", "Midnight"))),
                     _ => None,
                 },
             };
@@ -411,8 +415,8 @@ fn alerts(days: &[serde_json::Value]) -> Vec<Alert> {
                 out.push(Alert {
                     id: format!("remind:{date}:{k}"),
                     at_ms: end - REMIND_BEFORE_MS,
-                    title: format!("{name} se termine dans 5 min"),
-                    body: format!("{what} à {} — as-tu prié {name} ?", clock(end)),
+                    title: if crate::i18n::is_fr() { format!("{name} se termine dans 5 min") } else { format!("{name} ends in 5 min") },
+                    body: if crate::i18n::is_fr() { format!("{what} à {} — as-tu prié {name} ?", clock(end)) } else { format!("{what} at {} — have you prayed {name}?", clock(end)) },
                     prayed_key: Some(format!("{date}:{k}")),
                 });
             }
@@ -423,7 +427,7 @@ fn alerts(days: &[serde_json::Value]) -> Vec<Alert> {
             out.push(Alert {
                 id: format!("adhan:{date}:jumuah{n}"),
                 at_ms: at,
-                title: "Joumouâa".into(),
+                title: crate::i18n::l("Joumouâa", "Jumu‘ah").into(),
                 body: format!("{}{iqama}", clock(at)),
                 prayed_key: None,
             });
@@ -451,7 +455,7 @@ fn toast(app: &AppHandle, a: &Alert) {
     let mut t = Toast::new(&app_id(app)).title(&a.title).text1(&a.body).sound(None).duration(ToastDuration::Short);
     if let Some(key) = a.prayed_key.clone() {
         let app = app.clone();
-        t = t.add_button("J'ai prié", "prayed").on_activated(move |action| {
+        t = t.add_button(crate::i18n::l("J'ai prié", "I prayed"), "prayed").on_activated(move |action| {
             if action.as_deref() == Some("prayed") {
                 set_prayed_inner(&key, true);
                 let _ = app.emit("prayer_done", prayed_list());
@@ -530,8 +534,8 @@ pub fn prayer_test_notify(app: AppHandle) {
         &Alert {
             id: String::new(),
             at_ms: 0,
-            title: "Dohr se termine dans 5 min".into(),
-            body: "Test — les rappels arriveront comme ceci".into(),
+            title: crate::i18n::l("Dohr se termine dans 5 min", "Dhuhr ends in 5 min").into(),
+            body: crate::i18n::l("Test — les rappels arriveront comme ceci", "Test — reminders will look like this").into(),
             prayed_key: Some("test".into()),
         },
     );

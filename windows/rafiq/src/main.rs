@@ -635,6 +635,7 @@ pub fn apply_lang(app: &AppHandle, lang: &str) {
         let mut c = st.cfg.lock().unwrap();
         c.lang = if matches!(lang, "fr" | "en") { lang.to_string() } else { "auto".into() };
         config::save(&c);
+        i18n::set_lang(&resolved_lang(&c.lang));
     }
     // Through refresh_menu, which makes sure the swap happens on the main thread: doing it from the
     // settings window's thread left the tray with a menu that would never open again.
@@ -1679,6 +1680,7 @@ fn main() {
     }
 
     let cfg = config::load();
+    i18n::set_lang(&resolved_lang(&cfg.lang));
     let port = cfg.port;
 
     tauri::Builder::default()
