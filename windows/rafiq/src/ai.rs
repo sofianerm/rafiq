@@ -113,7 +113,7 @@ pub struct AiConfig {
 }
 
 /// Le Worker Cloudflare de l'essai gratuit, une fois déployé (pas un secret : la clé reste chez Cloudflare)
-const TRIAL_URL: &str = "";
+const TRIAL_URL: &str = "https://rafiq-clippy-trial.smrafiq.workers.dev/v1/clippy";
 
 fn default_trial_url() -> String {
     TRIAL_URL.into()

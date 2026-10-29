@@ -7,7 +7,7 @@ workers_dev = true
 # Les compteurs d'essais. L'id vient de « npx wrangler kv namespace create TRIAL ».
 [[kv_namespaces]]
 binding = "TRIAL"
-id = "REMPLACER_PAR_L_ID_DU_KV"
+id = "104bae12af0a4a1aa801973f02dc6ac0"
 
 # Les plafonds, modifiables ici puis « npx wrangler deploy »
 [vars]

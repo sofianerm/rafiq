@@ -4,3 +4,6 @@ Clippy.zip
 
 # Config perso de l installeur Rafiq-Sofiane : reste en local, jamais publiee
 windows/rafiq/presets/
+
+# Cache local de wrangler (compte Cloudflare) : jamais commité
+server/clippy-trial/.wrangler/

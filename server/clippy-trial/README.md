@@ -20,5 +20,5 @@ npx wrangler secret put DEEPSEEK_API_KEY    # coller la clé quand il la demande
 npx wrangler deploy                         # affiche l'URL https://rafiq-clippy-trial.<compte>.workers.dev
 ```
 
-Puis mettre `https://…workers.dev/v1/clippy` dans `TRIAL_URL` (`windows/rafiq/src/ai.rs`) et
-reconstruire Rafiq. Changer un plafond : modifier `[vars]` dans `wrangler.toml`, puis `npx wrangler deploy`.
+En service : `https://rafiq-clippy-trial.smrafiq.workers.dev/v1/clippy`, l'adresse de `TRIAL_URL`
+(`windows/rafiq/src/ai.rs`) ; un autre déploiement demande d'y mettre sa propre adresse et de reconstruire Rafiq. Changer un plafond : modifier `[vars]` dans `wrangler.toml`, puis `npx wrangler deploy`.
