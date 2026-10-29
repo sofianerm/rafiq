@@ -108,27 +108,31 @@
 <div id="bar" data-tauri-drag-region><button id="close" title="Fermer" aria-label="Fermer">✕</button></div>
 <div id="me" data-tauri-drag-region>
   <div id="ring"><svg viewBox="0 0 46 46"><circle class="bg" cx="23" cy="23" r="20" fill="none" stroke-width="4"/><circle class="fg" id="arc" cx="23" cy="23" r="20" fill="none" stroke-width="4" stroke-linecap="round" stroke-dasharray="125.7" stroke-dashoffset="125.7"/></svg><span>ر</span></div>
-  <div class="who"><b>Rafiq</b><br><span id="whoSub">ton compagnon</span></div>
+  <div class="who"><b>Rafiq</b><br><span id="whoSub"></span></div>
 </div>
 <div id="stage"></div>
-<div id="foot"><div id="dots"></div><div id="nav"><button id="back">Retour</button><button id="next">Suivant</button></div></div>
+<div id="foot"><div id="dots"></div><div id="nav"><button id="back"></button><button id="next"></button></div></div>
 
 <script>
 const T = window.__TAURI__;
 const invoke = (cmd, args) => T && T.core ? T.core.invoke(cmd, args) : Promise.reject(new Error('no bridge'));
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
 
+// La langue de l'accueil (et de toute l'app) : choisie au premier écran, celle de Windows par défaut
+let lang = 'fr';
+const W = (fr, en) => lang === 'fr' ? fr : en;
+
 const METHODS = [
-  [3, 'Ligue islamique mondiale'], [12, 'UOIF (France)'], [2, 'ISNA (Amérique du Nord)'],
-  [4, 'Umm al-Qura (La Mecque)'], [5, 'Autorité égyptienne'], [1, 'Karachi'],
-  [13, 'Diyanet (Turquie)'], [15, 'Moonsighting Committee'],
+  [3, 'Ligue islamique mondiale', 'Muslim World League'], [12, 'UOIF (France)', 'UOIF (France)'], [2, 'ISNA (Amérique du Nord)', 'ISNA (North America)'],
+  [4, 'Umm al-Qura (La Mecque)', 'Umm al-Qura (Makkah)'], [5, 'Autorité égyptienne', 'Egyptian Authority'], [1, 'Karachi', 'Karachi'],
+  [13, 'Diyanet (Turquie)', 'Diyanet (Turkey)'], [15, 'Moonsighting Committee', 'Moonsighting Committee'],
 ];
-// Les modules proposés à la fin (la prière et les transports ont leur propre question)
-const EXTRAS = [
-  ['meteo', 'Météo', 'La température sous l’anneau, la pluie qui arrive, les 4 prochains jours.'],
-  ['clipboard', 'Presse-papier', 'Tes 30 derniers copiés, à un clic. Les mots de passe sont ignorés.'],
-  ['asma', 'Un nom d’Allah par jour', 'Un des 99 noms, avec son sens.'],
-  ['screentime', 'Temps d’écran', 'Le temps passé dans chaque app aujourd’hui, gardé sur ce PC.'],
+// Les modules proposés à la fin (la prière, les transports et Clippy ont leur propre question)
+const EXTRAS = () => [
+  ['meteo', W('Météo', 'Weather'), W('La température sous l’anneau, la pluie qui arrive, les 4 prochains jours.', 'The temperature under the ring, the rain on its way, the next 4 days.')],
+  ['clipboard', W('Presse-papier', 'Clipboard'), W('Tes 30 derniers copiés, à un clic. Les mots de passe sont ignorés.', 'Your last 30 copies, one click away. Passwords are left out.')],
+  ['asma', W('Un nom d’Allah par jour', 'A name of Allah each day'), W('Un des 99 noms, avec son sens.', 'One of the 99 names, with its meaning.')],
+  ['screentime', W('Temps d’écran', 'Screen time'), W('Le temps passé dans chaque app aujourd’hui, gardé sur ce PC.', 'Time spent in each app today, kept on this PC.')],
 ];
 
 // Où obtenir une clé chez chaque fournisseur de Clippy (src/ai.rs) ; open_link n'ouvre que ces pages
@@ -155,24 +159,38 @@ const cityText = c => c ? c.name + (c.country ? ' (' + c.country + ')' : '') : '
 
 /* ---- les écrans ---- */
 const SCREENS = [
-  { // 0 — Rafiq se présente
-    html: () => `<h1>Salam ! Moi, c’est <em>Rafiq</em>.</h1>
-      <p>Rafiq, ça veut dire « compagnon ». Je vis sur le bord de ton écran, discret, et je t’aide au quotidien :</p>
-      <div class="feats">
-        <div><i>☾</i>Les heures de prière, et un rappel avant la fin du temps</div>
-        <div><i>⇄</i>Tes prochains trams, bus et trains</div>
-        <div><i>°</i>La météo de chez toi</div>
-        <div><i>⧉</i>Tout ce que tu copies, gardé sous la main</div>
-        <div><i>✦</i>Clippy, une IA pour réécrire tes textes</div>
-        <div><i>◔</i>L’usage de tes IA (Claude, Codex…)</div>
-      </div>
-      <p class="note">Quelques questions et je suis prêt. Tout reste modifiable ensuite dans les Settings.</p>`,
-    next: 'Enchanté !',
+  { // 0 — la langue
+    html: () => `<h1>Français ou English ?</h1>
+      <p>${W('Choisis la langue de Rafiq. Tu pourras la changer dans les Settings → Apparence.', 'Choose Rafiq’s language. You can change it later in Settings → Appearance.')}</p>
+      <div class="yesno" id="lang"><button data-v="fr" class="${lang === 'fr' ? 'on' : ''}">Français</button><button data-v="en" class="${lang === 'en' ? 'on' : ''}">English</button></div>`,
+    mount: el => el.querySelector('#lang').addEventListener('click', e => {
+      const b = e.target.closest('button[data-v]');
+      if(!b || b.dataset.v === lang) return;
+      lang = b.dataset.v;
+      // Toute l'app passe dans cette langue tout de suite (menu, notch, Settings)
+      invoke('set_lang', { lang }).catch(() => {});
+      show();
+    }),
+    next: () => W('Suivant', 'Next'),
   },
-  { // 1 — le prénom
-    html: () => `<h1>Et toi, comment tu t’appelles ?</h1>
-      <p>Juste ton prénom, pour que je sache à qui je parle.</p>
-      <input id="name" maxlength="40" placeholder="Ton prénom" autocomplete="off" value="${esc(first())}">`,
+  { // 1 — Rafiq se présente
+    html: () => `<h1>${W('Salam ! Moi, c’est <em>Rafiq</em>.', 'Salam! I’m <em>Rafiq</em>.')}</h1>
+      <p>${W('Rafiq, ça veut dire « compagnon ». Je vis sur le bord de ton écran, discret, et je t’aide au quotidien :', 'Rafiq means “companion”. I live on the edge of your screen, out of the way, and help you every day:')}</p>
+      <div class="feats">
+        <div><i>☾</i>${W('Les heures de prière, et un rappel avant la fin du temps', 'Prayer times, and a reminder before each one ends')}</div>
+        <div><i>⇄</i>${W('Tes prochains trams, bus et trains', 'Your next trams, buses and trains')}</div>
+        <div><i>°</i>${W('La météo de chez toi', 'The weather where you live')}</div>
+        <div><i>⧉</i>${W('Tout ce que tu copies, gardé sous la main', 'Everything you copy, kept at hand')}</div>
+        <div><i>✦</i>${W('Clippy, une IA pour réécrire tes textes', 'Clippy, an AI that rewrites your texts')}</div>
+        <div><i>◔</i>${W('L’usage de tes IA (Claude, Codex…)', 'Your AI usage (Claude, Codex…)')}</div>
+      </div>
+      <p class="note">${W('Quelques questions et je suis prêt. Tout reste modifiable ensuite dans les Settings.', 'A few questions and I’m ready. Everything can be changed later in Settings.')}</p>`,
+    next: () => W('Enchanté !', 'Nice to meet you!'),
+  },
+  { // 2 — le prénom
+    html: () => `<h1>${W('Et toi, comment tu t’appelles ?', 'And you, what’s your name?')}</h1>
+      <p>${W('Juste ton prénom, pour que je sache à qui je parle.', 'Just your first name, so I know who I’m talking to.')}</p>
+      <input id="name" maxlength="40" placeholder="${W('Ton prénom', 'Your first name')}" autocomplete="off" value="${esc(first())}">`,
     mount: el => {
       const i = el.querySelector('#name');
       i.addEventListener('input', () => { setup.user_name = i.value.trim(); refreshNav(); });
@@ -181,38 +199,38 @@ const SCREENS = [
     },
     ok: () => first().length > 0,
   },
-  { // 2 — la ville
-    html: () => `<h1>Enchanté, <em>${esc(first())}</em> ! Tu habites où ?</h1>
-      <p>Ta ville me sert pour la météo et les heures de prière. Je garde seulement ses coordonnées, sur ce PC.</p>
-      <input id="city" placeholder="Ta ville…" autocomplete="off"><div class="sugg" id="citySugg"></div>
-      <div class="chosen" id="cityNow">${setup.city ? 'C’est noté : <b>' + esc(cityText(setup.city)) + '</b>' : ''}</div>`,
+  { // 3 — la ville
+    html: () => `<h1>${W('Enchanté, <em>' + esc(first()) + '</em> ! Tu habites où ?', 'Nice to meet you, <em>' + esc(first()) + '</em>! Where do you live?')}</h1>
+      <p>${W('Ta ville me sert pour la météo et les heures de prière. Je garde seulement ses coordonnées, sur ce PC.', 'Your city is for the weather and the prayer times. I only keep its coordinates, on this PC.')}</p>
+      <input id="city" placeholder="${W('Ta ville…', 'Your city…')}" autocomplete="off"><div class="sugg" id="citySugg"></div>
+      <div class="chosen" id="cityNow">${setup.city ? W('C’est noté : ', 'Got it: ') + '<b>' + esc(cityText(setup.city)) + '</b>' : ''}</div>`,
     mount: el => {
       suggest(el.querySelector('#city'), el.querySelector('#citySugg'), searchCities, c => {
         setup.city = c;
-        el.querySelector('#cityNow').innerHTML = 'C’est noté : <b>' + esc(cityText(c)) + '</b>';
+        el.querySelector('#cityNow').innerHTML = W('C’est noté : ', 'Got it: ') + '<b>' + esc(cityText(c)) + '</b>';
         refreshNav();
       });
       setTimeout(() => el.querySelector('#city').focus(), 120);
     },
-    next: () => setup.city ? 'Suivant' : 'Passer',
+    next: () => setup.city ? W('Suivant', 'Next') : W('Passer', 'Skip'),
   },
-  { // 3 — la prière
-    html: () => `<h1>Tu veux que je te rappelle les heures de prière ?</h1>
-      <p>Un décompte jusqu’à la prochaine prière, une notification discrète à l’adhan, et une autre cinq minutes avant la fin du temps.</p>
-      <div class="yesno" id="pray"><button data-v="1" class="${ans.prayer ? 'on' : ''}">Oui, volontiers</button><button data-v="0" class="${ans.prayer ? '' : 'on'}">Non merci</button></div>
+  { // 4 — la prière
+    html: () => `<h1>${W('Tu veux que je te rappelle les heures de prière ?', 'Shall I remind you of the prayer times?')}</h1>
+      <p>${W('Un décompte jusqu’à la prochaine prière, une notification discrète à l’adhan, et une autre cinq minutes avant la fin du temps.', 'A countdown to the next prayer, a quiet notification at the adhan, and another five minutes before its time runs out.')}</p>
+      <div class="yesno" id="pray"><button data-v="1" class="${ans.prayer ? 'on' : ''}">${W('Oui, volontiers', 'Yes, please')}</button><button data-v="0" class="${ans.prayer ? '' : 'on'}">${W('Non merci', 'No thanks')}</button></div>
       <div id="prayMore"></div>`,
     mount: el => {
       const more = () => {
         const box = el.querySelector('#prayMore');
         if(!ans.prayer){ box.innerHTML = ''; return; }
         if(setup.prayer_source === 'masjidbox'){
-          box.innerHTML = '<p>Je lis les horaires de ta mosquée sur masjidbox.com. Tu peux passer aux horaires calculés dans les Settings → Profil.</p>';
+          box.innerHTML = '<p>' + W('Je lis les horaires de ta mosquée sur masjidbox.com. Tu peux passer aux horaires calculés dans les Settings → Profil.', 'I read your mosque’s times on masjidbox.com. You can switch to calculated times in Settings → Profile.') + '</p>';
           return;
         }
-        box.innerHTML = '<p style="margin-bottom:6px">Je les calcule' + (setup.city ? ' pour ' + esc(setup.city.name) : '') + ' avec la méthode :</p>'
-          + '<select id="method">' + METHODS.map(([v, n]) => '<option value="' + v + '"' + (v === setup.prayer_method ? ' selected' : '') + '>' + esc(n) + '</option>').join('') + '</select>'
-          + '<p class="note">Ta mosquée publie ses horaires sur masjidbox.com ? Tu pourras l’indiquer dans les Settings → Profil, avec l’iqama.'
-          + (setup.city ? '' : ' Sans ville, je ne peux pas encore les calculer : reviens en arrière pour en choisir une.') + '</p>';
+        box.innerHTML = '<p style="margin-bottom:6px">' + W('Je les calcule' + (setup.city ? ' pour ' + esc(setup.city.name) : '') + ' avec la méthode :', 'I calculate them' + (setup.city ? ' for ' + esc(setup.city.name) : '') + ' with the method:') + '</p>'
+          + '<select id="method">' + METHODS.map(([v, fr, en]) => '<option value="' + v + '"' + (v === setup.prayer_method ? ' selected' : '') + '>' + esc(W(fr, en)) + '</option>').join('') + '</select>'
+          + '<p class="note">' + W('Ta mosquée publie ses horaires sur masjidbox.com ? Tu pourras l’indiquer dans les Settings → Profil, avec l’iqama.', 'Does your mosque publish its times on masjidbox.com? You can set it in Settings → Profile, with the iqama.')
+          + (setup.city ? '' : W(' Sans ville, je ne peux pas encore les calculer : reviens en arrière pour en choisir une.', ' Without a city I can’t calculate them yet: go back to pick one.')) + '</p>';
         box.querySelector('#method').addEventListener('change', e => { setup.prayer_method = Number(e.target.value); });
       };
       el.querySelector('#pray').addEventListener('click', e => {
@@ -225,22 +243,22 @@ const SCREENS = [
       more();
     },
   },
-  { // 4 — les transports
-    html: () => `<h1>Tu prends les transports ?</h1>
-      <p>Dis-moi tes arrêts : je te montre les prochains départs, retards compris.</p>
-      <div class="yesno" id="tr"><button data-v="1" class="${ans.transit ? 'on' : ''}">Oui</button><button data-v="0" class="${ans.transit ? '' : 'on'}">Pas vraiment</button></div>
+  { // 5 — les transports
+    html: () => `<h1>${W('Tu prends les transports ?', 'Do you take public transport?')}</h1>
+      <p>${W('Dis-moi tes arrêts : je te montre les prochains départs, retards compris.', 'Tell me your stops: I’ll show you the next departures, delays included.')}</p>
+      <div class="yesno" id="tr"><button data-v="1" class="${ans.transit ? 'on' : ''}">${W('Oui', 'Yes')}</button><button data-v="0" class="${ans.transit ? '' : 'on'}">${W('Pas vraiment', 'Not really')}</button></div>
       <div id="trMore"></div>`,
     mount: el => {
       const more = () => {
         const box = el.querySelector('#trMore');
         if(!ans.transit){ box.innerHTML = ''; return; }
-        box.innerHTML = '<input id="stop" placeholder="Un arrêt, une gare…" autocomplete="off"><div class="sugg" id="stopSugg"></div><div class="stops" id="stops"></div>'
+        box.innerHTML = '<input id="stop" placeholder="' + W('Un arrêt, une gare…', 'A stop, a station…') + '" autocomplete="off"><div class="sugg" id="stopSugg"></div><div class="stops" id="stops"></div>'
           + (setup.transit_source === 'opendata'
-            ? '<p class="note">Horaires de transport.opendata.ch (Suisse).</p>'
-            : '<p class="note">Horaires : <span class="lk" data-link="https://transitous.org/sources/">Transitous et ses sources</span> · <span class="lk" data-link="https://www.openstreetmap.org/copyright">© OpenStreetMap</span></p>');
+            ? '<p class="note">' + W('Horaires de transport.opendata.ch (Suisse).', 'Times from transport.opendata.ch (Switzerland).') + '</p>'
+            : '<p class="note">' + W('Horaires', 'Times') + ' : <span class="lk" data-link="https://transitous.org/sources/">' + W('Transitous et ses sources', 'Transitous and its sources') + '</span> · <span class="lk" data-link="https://www.openstreetmap.org/copyright">© OpenStreetMap</span></p>');
         const draw = () => {
           box.querySelector('#stops').innerHTML = setup.transit_stops.map((s, i) =>
-            '<div class="row"><span>' + esc(s.name) + (s.sub ? '<small style="color:#9a9aa0;margin-left:6px">' + esc(s.sub) + '</small>' : '') + '</span><button data-rm="' + i + '" aria-label="Retirer">✕</button></div>').join('');
+            '<div class="row"><span>' + esc(s.name) + (s.sub ? '<small style="color:#9a9aa0;margin-left:6px">' + esc(s.sub) + '</small>' : '') + '</span><button data-rm="' + i + '" aria-label="' + W('Retirer', 'Remove') + '">✕</button></div>').join('');
           box.querySelector('#stop').disabled = setup.transit_stops.length >= 4;
         };
         box.querySelector('#stops').addEventListener('click', e => {
@@ -264,35 +282,37 @@ const SCREENS = [
       more();
     },
   },
-  { // 5 — Clippy
-    html: () => `<h1>Tu veux un assistant pour réécrire tes textes ?</h1>
-      <p>Sélectionne un texte n’importe où, Ctrl+Alt+C : je le corrige, le traduis ou le reformule, et je le recolle à sa place. ${ai && ai.trial_available ? 'Tu as 5 essais offerts pour découvrir, ou mets ta propre clé d’API (souvent quelques centimes par mois).' : 'Il me faut une IA et ta propre clé d’API (souvent quelques centimes par mois).'}</p>
-      <div class="yesno" id="cl"><button data-v="1" class="${ans.clippy ? 'on' : ''}">Oui, je veux Clippy</button><button data-v="0" class="${ans.clippy ? '' : 'on'}">Plus tard</button></div>
+  { // 6 — Clippy
+    html: () => `<h1>${W('Tu veux un assistant pour réécrire tes textes ?', 'Would you like an assistant to rewrite your texts?')}</h1>
+      <p>${W('Sélectionne un texte n’importe où, Ctrl+Alt+C : je le corrige, le traduis ou le reformule, et je le recolle à sa place.', 'Select some text anywhere, press Ctrl+Alt+C: I correct, translate or rephrase it, and paste it back.')} ${ai && ai.trial_available ? W('Tu as 5 essais offerts pour découvrir, ou mets ta propre clé d’API (souvent quelques centimes par mois).', 'You get 5 free tries to see how it works, or use your own API key (often a few cents a month).') : W('Il me faut une IA et ta propre clé d’API (souvent quelques centimes par mois).', 'I need an AI and your own API key (often a few cents a month).')}</p>
+      <div class="yesno" id="cl"><button data-v="1" class="${ans.clippy ? 'on' : ''}">${W('Oui, je veux Clippy', 'Yes, I want Clippy')}</button><button data-v="0" class="${ans.clippy ? '' : 'on'}">${W('Plus tard', 'Later')}</button></div>
       <div id="clMore"></div>`,
     mount: el => {
+      const keepNote = () => W('Ta clé reste sur ce PC.', 'Your key stays on this PC.');
       const more = () => {
         const box = el.querySelector('#clMore');
-        if(!ans.clippy){ box.innerHTML = '<p class="note">Tu pourras l’activer quand tu veux : module Clippy, puis Réglages.</p>'; return; }
+        if(!ans.clippy){ box.innerHTML = '<p class="note">' + W('Tu pourras l’activer quand tu veux : module Clippy, puis Réglages.', 'You can switch it on whenever you like: Clippy module, then Settings.') + '</p>'; return; }
         const pv = ai ? ai.providers.find(x => x.id === clip.provider) : null;
         const t = clip.test;
-        box.innerHTML = '<p style="margin-bottom:6px">Quelle IA ?</p>'
+        box.innerHTML = '<p style="margin-bottom:6px">' + W('Quelle IA ?', 'Which AI?') + '</p>'
           + '<select id="clProv">' + (ai ? ai.providers : []).map(x => '<option value="' + esc(x.id) + '"' + (x.id === clip.provider ? ' selected' : '') + '>' + esc(x.name) + '</option>').join('') + '</select>'
-          + (ai && ai.trial_available && !(pv && pv.has_key) ? '<p class="note" style="margin:8px 0;color:var(--green)">Sans clé, tu as 5 essais offerts. Tu peux en mettre une maintenant ou plus tard.</p>' : '')
-          + '<p class="note" style="margin:8px 0">Pas encore de clé ? <span class="lk" data-link="' + esc(KEY_PAGES[clip.provider] || '') + '">Crée-la chez ' + esc(pv ? pv.name : clip.provider) + '</span>, puis colle-la ici.</p>'
-          + '<div style="display:flex;gap:8px"><input id="clKey" type="password" autocomplete="off" placeholder="' + (pv && pv.has_key && !clip.key ? 'Clé déjà enregistrée' : 'Ta clé d’API') + '" value="' + esc(clip.key) + '"><button class="mini" id="clTest">Tester</button></div>'
-          + '<p class="note" id="clRes" style="color:' + (t ? (t.ok ? 'var(--green)' : '#FF8A70') : 'var(--text3)') + '">' + esc(t ? t.text : 'Ta clé reste sur ce PC.') + '</p>';
+          + (ai && ai.trial_available && !(pv && pv.has_key) ? '<p class="note" style="margin:8px 0;color:var(--green)">' + W('Sans clé, tu as 5 essais offerts. Tu peux en mettre une maintenant ou plus tard.', 'Without a key you get 5 free tries. You can add one now or later.') + '</p>' : '')
+          + '<p class="note" style="margin:8px 0">' + W('Pas encore de clé ? ', 'No key yet? ') + '<span class="lk" data-link="' + esc(KEY_PAGES[clip.provider] || '') + '">' + W('Crée-la chez ', 'Create one at ') + esc(pv ? pv.name : clip.provider) + '</span>' + W(', puis colle-la ici.', ', then paste it here.') + '</p>'
+          + '<div style="display:flex;gap:8px"><input id="clKey" type="password" autocomplete="off" placeholder="' + (pv && pv.has_key && !clip.key ? W('Clé déjà enregistrée', 'Key already saved') : W('Ta clé d’API', 'Your API key')) + '" value="' + esc(clip.key) + '"><button class="mini" id="clTest">' + W('Tester', 'Test') + '</button></div>'
+          + '<p class="note" id="clRes" style="color:' + (t ? (t.ok ? 'var(--green)' : '#FF8A70') : 'var(--text3)') + '">' + esc(t ? t.text : keepNote()) + '</p>';
         box.querySelector('#clProv').addEventListener('change', e => { clip.provider = e.target.value; clip.key = ''; clip.test = null; clip.models = null; more(); refreshNav(); });
         const key = box.querySelector('#clKey');
-        key.addEventListener('input', () => { clip.key = key.value.trim(); clip.test = null; clip.models = null; box.querySelector('#clRes').textContent = 'Ta clé reste sur ce PC.'; box.querySelector('#clRes').style.color = 'var(--text3)'; });
+        key.addEventListener('input', () => { clip.key = key.value.trim(); clip.test = null; clip.models = null; box.querySelector('#clRes').textContent = keepNote(); box.querySelector('#clRes').style.color = 'var(--text3)'; });
         box.querySelector('#clTest').addEventListener('click', async () => {
           const res = box.querySelector('#clRes');
-          res.style.color = 'var(--yellow)'; res.textContent = 'Je vérifie…';
+          res.style.color = 'var(--yellow)'; res.textContent = W('Je vérifie…', 'Checking…');
           try {
             const list = await invoke('ai_list_models', { provider:clip.provider, apiKey:clip.key || null });
             clip.models = list;
-            clip.test = { ok:true, text:'Ça marche : ' + list.length + ' modèle' + (list.length > 1 ? 's' : '') + ' disponible' + (list.length > 1 ? 's' : '') + '.' };
+            const n = list.length;
+            clip.test = { ok:true, text:W('Ça marche : ' + n + ' modèle' + (n > 1 ? 's' : '') + ' disponible' + (n > 1 ? 's' : '') + '.', 'It works: ' + n + ' model' + (n > 1 ? 's' : '') + ' available.') };
           } catch(e) {
-            clip.test = { ok:false, text:'Cette clé ne marche pas : ' + (e && e.message || e) };
+            clip.test = { ok:false, text:W('Cette clé ne marche pas : ', 'This key doesn’t work: ') + (e && e.message || e) };
           }
           res.style.color = clip.test.ok ? 'var(--green)' : '#FF8A70';
           res.textContent = clip.test.text;
@@ -309,15 +329,15 @@ const SCREENS = [
       more();
     },
   },
-  { // 6 — les IA suivies
-    html: () => `<h1>Tu utilises quelles IA ?</h1>
-      <p>Je peux suivre ta consommation : ce qu’il te reste de ton forfait, et si Claude travaille encore. Coche celles que tu utilises${usage.detected.size ? ' ; j’ai pré-coché celles que j’ai trouvées sur ce PC' : ''}.</p>
+  { // 7 — les IA suivies
+    html: () => `<h1>${W('Tu utilises quelles IA ?', 'Which AIs do you use?')}</h1>
+      <p>${W('Je peux suivre ta consommation : ce qu’il te reste de ton forfait, et si Claude travaille encore. Coche celles que tu utilises', 'I can follow your usage: what’s left of your plan, and whether Claude is still working. Tick the ones you use')}${usage.detected.size ? W(' ; j’ai pré-coché celles que j’ai trouvées sur ce PC', '; I’ve ticked the ones I found on this PC') : ''}.</p>
       <div class="mods" id="usage">${USAGE.map(([id, name, sub]) => {
         const on = usage.picked.has(id), g = usage.glyphs[id];
         const icon = g && g.kind === 'svg' && g.svg ? '<span class="ic">' + g.svg + '</span>' : g && g.url ? '<span class="ic"><img src="' + esc(g.url) + '" alt=""></span>' : '<span class="ic letter">' + esc(name.slice(0, 2)) + '</span>';
-        return '<button class="mod' + (on ? ' on' : '') + '" data-id="' + id + '">' + icon + '<span class="t"><b>' + esc(name) + '</b><span>' + esc(usage.detected.has(id) ? 'Trouvé sur ce PC' : sub || ' ') + '</span></span><span class="ck">' + (on ? '✓' : '') + '</span></button>';
+        return '<button class="mod' + (on ? ' on' : '') + '" data-id="' + id + '">' + icon + '<span class="t"><b>' + esc(name) + '</b><span>' + esc(usage.detected.has(id) ? W('Trouvé sur ce PC', 'Found on this PC') : sub || ' ') + '</span></span><span class="ck">' + (on ? '✓' : '') + '</span></button>';
       }).join('')}</div>
-      <p class="note">Aucune ? Pas de souci, le notch n’affichera que tes modules.</p>`,
+      <p class="note">${W('Aucune ? Pas de souci, le notch n’affichera que tes modules.', 'None? No problem, the notch will only show your modules.')}</p>`,
     mount: el => el.querySelector('#usage').addEventListener('click', e => {
       const b = e.target.closest('.mod');
       if(!b) return;
@@ -327,10 +347,10 @@ const SCREENS = [
       b.querySelector('.ck').textContent = on ? '✓' : '';
     }),
   },
-  { // 7 — le reste
-    html: () => `<h1>Et qu’est-ce que tu veux voir d’autre ?</h1>
-      <p>Choisis ce qui t’est utile, tu pourras changer d’avis dans les Settings.</p>
-      <div class="mods" id="mods">${EXTRAS.map(([id, name, what]) =>
+  { // 8 — le reste
+    html: () => `<h1>${W('Et qu’est-ce que tu veux voir d’autre ?', 'And what else would you like to see?')}</h1>
+      <p>${W('Choisis ce qui t’est utile, tu pourras changer d’avis dans les Settings.', 'Pick what’s useful to you; you can change your mind in Settings.')}</p>
+      <div class="mods" id="mods">${EXTRAS().map(([id, name, what]) =>
         '<button class="mod' + (ans.extras[id] ? ' on' : '') + '" data-id="' + id + '"><span class="t"><b>' + esc(name) + '</b><span>' + esc(what) + '</span></span><span class="ck">' + (ans.extras[id] ? '✓' : '') + '</span></button>').join('')}</div>`,
     mount: el => el.querySelector('#mods').addEventListener('click', e => {
       const b = e.target.closest('.mod');
@@ -341,24 +361,25 @@ const SCREENS = [
       b.querySelector('.ck').textContent = on ? '✓' : '';
     }),
   },
-  { // 8 — c'est parti
-    html: () => `<h1>C’est parti, <em>${esc(first())}</em> !</h1>
-      <p>Je suis sur le bord droit de ton écran. Passe la souris sur moi pour tout voir, clique sur un anneau pour le rafraîchir.</p>
-      <p>Clic droit sur le notch pour les Settings : ton profil, tes modules, leur ordre… tout se change là-bas.</p>
+  { // 9 — c'est parti
+    html: () => `<h1>${W('C’est parti, <em>' + esc(first()) + '</em> !', 'Let’s go, <em>' + esc(first()) + '</em>!')}</h1>
+      <p>${W('Je suis sur le bord droit de ton écran. Passe la souris sur moi pour tout voir, clique sur un anneau pour le rafraîchir.', 'I’m on the right-hand edge of your screen. Hover over me to see everything, click a ring to refresh it.')}</p>
+      <p>${W('Clic droit sur le notch pour les Settings : ton profil, tes modules, leur ordre… tout se change là-bas.', 'Right-click the notch for Settings: your profile, your modules, their order… everything can be changed there.')}</p>
       <p class="note">${esc(recap())}</p>`,
-    next: 'C’est parti',
+    next: () => W('C’est parti', 'Let’s go'),
   },
 ];
 
 function recap(){
   const bits = [];
   if(setup.city) bits.push(setup.city.name);
-  if(ans.prayer) bits.push('prière');
-  if(ans.transit && setup.transit_stops.length) bits.push(setup.transit_stops.length + ' arrêt' + (setup.transit_stops.length > 1 ? 's' : ''));
-  EXTRAS.forEach(([id, name]) => { if(ans.extras[id]) bits.push(name.toLowerCase()); });
+  if(ans.prayer) bits.push(W('prière', 'prayer'));
+  const n = setup.transit_stops.length;
+  if(ans.transit && n) bits.push(n + W(' arrêt' + (n > 1 ? 's' : ''), ' stop' + (n > 1 ? 's' : '')));
+  EXTRAS().forEach(([id, name]) => { if(ans.extras[id]) bits.push(name.toLowerCase()); });
   if(clippyOn()) bits.push('Clippy');
   USAGE.forEach(([id, name]) => { if(usage.picked.has(id)) bits.push(name); });
-  return bits.length ? 'Au programme : ' + bits.join(' · ') + '.' : '';
+  return bits.length ? W('Au programme : ', 'Coming up: ') + bits.join(' · ') + '.' : '';
 }
 
 /* ---- navigation ---- */
@@ -367,13 +388,17 @@ let current = null;
 function canNext(){ const s = SCREENS[step]; return !s.ok || s.ok(); }
 function refreshNav(){
   const s = SCREENS[step], next = document.getElementById('next');
-  next.textContent = typeof s.next === 'function' ? s.next() : (s.next || 'Suivant');
+  next.textContent = typeof s.next === 'function' ? s.next() : (s.next || W('Suivant', 'Next'));
   next.disabled = !canNext();
-  document.getElementById('back').hidden = step === 0;
+  const back = document.getElementById('back');
+  back.textContent = W('Retour', 'Back');
+  back.hidden = step === 0;
+  document.getElementById('close').title = W('Fermer', 'Close');
+  document.documentElement.lang = lang;
   document.getElementById('dots').innerHTML = SCREENS.map((_, i) => '<i' + (i === step ? ' class="on"' : '') + '></i>').join('');
   // L'anneau se remplit au fil des questions
   document.getElementById('arc').style.strokeDashoffset = String(125.7 * (1 - step / (SCREENS.length - 1)));
-  document.getElementById('whoSub').textContent = first() ? 'le compagnon de ' + first() : 'ton compagnon';
+  document.getElementById('whoSub').textContent = first() ? W('le compagnon de ' + first(), first() + '’s companion') : W('ton compagnon', 'your companion');
 }
 function show(){
   const el = document.createElement('div');
@@ -429,7 +454,7 @@ async function finish(){
     await invoke('set_notch_slots', { slots:slots.length ? slots : [{ provider:'none' }] });
   } catch(e) {
     next.disabled = false;
-    next.textContent = 'Réessayer';
+    next.textContent = W('Réessayer', 'Try again');
     return;
   }
   closeMe();
@@ -445,9 +470,9 @@ function suggest(input, list, search, pick){
     timer = setTimeout(async () => {
       const mine = ++seq;
       let items;
-      try { items = await search(q); } catch(e) { list.innerHTML = '<p class="note">Recherche impossible : ' + esc(e && e.message || e) + '</p>'; return; }
+      try { items = await search(q); } catch(e) { list.innerHTML = '<p class="note">' + W('Recherche impossible : ', 'Search failed: ') + esc(e && e.message || e) + '</p>'; return; }
       if(mine !== seq) return;
-      list.innerHTML = items.length ? '' : '<p class="note">Je ne trouve rien, essaie autrement.</p>';
+      list.innerHTML = items.length ? '' : '<p class="note">' + W('Je ne trouve rien, essaie autrement.', 'Nothing found, try something else.') + '</p>';
       items.forEach(it => {
         const b = document.createElement('button');
         b.innerHTML = esc(it.label) + (it.sub ? '<small>' + esc(it.sub) + '</small>' : '');
@@ -458,7 +483,7 @@ function suggest(input, list, search, pick){
   });
 }
 async function searchCities(q){
-  const r = await fetch('https://geocoding-api.open-meteo.com/v1/search?count=6&language=fr&format=json&name=' + encodeURIComponent(q));
+  const r = await fetch('https://geocoding-api.open-meteo.com/v1/search?count=6&format=json&language=' + lang + '&name=' + encodeURIComponent(q));
   if(!r.ok) throw new Error('HTTP ' + r.status);
   const j = await r.json();
   return (j.results || []).map(c => ({
@@ -479,7 +504,10 @@ async function searchStops(q){
 
 /* ---- départ : on repart de ce qui est déjà réglé (« Revoir l'accueil » ne perd rien) ---- */
 Promise.all([invoke('get_setup'), invoke('get_notch_modules').catch(() => []), invoke('ai_get').catch(() => null),
-  invoke('get_tray_options').catch(() => []), invoke('get_notch_slots').catch(() => []), invoke('get_glyphs').catch(() => ({}))]).then(([s, m, a, opts, slots, glyphs]) => {
+  invoke('get_tray_options').catch(() => []), invoke('get_notch_slots').catch(() => []), invoke('get_glyphs').catch(() => ({})),
+  invoke('get_lang_resolved').catch(() => '')]).then(([s, m, a, opts, slots, glyphs, resolved]) => {
+  // La langue de départ : celle déjà réglée, sinon celle de Windows (fr ou en)
+  lang = String(resolved || navigator.language || '').toLowerCase().startsWith('fr') ? 'fr' : 'en';
   // Trouvées sur ce PC : celles qui ne sont pas « absentes » ; déjà réglé (Revoir l'accueil) : le choix actuel
   usage.glyphs = glyphs || {};
   (Array.isArray(opts) ? opts : []).forEach(o => { if(o && o.status && o.status !== 'absent') usage.detected.add(o.id); });
@@ -494,11 +522,12 @@ Promise.all([invoke('get_setup'), invoke('get_notch_modules').catch(() => []), i
   const isOn = id => { const x = modules.find(y => y.id === id); return x ? x.on !== false : !modules.length; };
   ans.prayer = setup.onboarded ? isOn('prayer') && setup.prayer_notify !== false : true;
   ans.transit = setup.transit_stops.length > 0;
-  EXTRAS.forEach(([id]) => { ans.extras[id] = setup.onboarded ? isOn(id) : id === 'meteo' || id === 'clipboard'; });
+  EXTRAS().forEach(([id]) => { ans.extras[id] = setup.onboarded ? isOn(id) : id === 'meteo' || id === 'clipboard'; });
   const pv = ai && ai.providers.find(x => x.id === clip.provider);
   ans.clippy = setup.onboarded ? isOn('clippy') && !!(pv && pv.has_key) : false;
   show();
 }).catch(() => {
+  lang = String(navigator.language || '').toLowerCase().startsWith('fr') ? 'fr' : 'en';
   setup = { user_name:'', city:null, prayer_source:'aladhan', prayer_method:3, prayer_masjid:'', prayer_notify:true, transit_source:'transitous', transit_stops:[], onboarded:false };
   show();
 });
