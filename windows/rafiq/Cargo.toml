@@ -34,6 +34,11 @@ chrono = { version = "0.4", default-features = false, features = ["std", "clock"
 rusqlite = { version = "0.32", features = ["bundled"] }
 arboard = { version = "3.6.1", default-features = false }
 
+[target.'cfg(target_os = "macos")'.dependencies]
+# Presse-papier et app au premier plan (temps d'écran) ; déjà tirés par Tauri
+objc2-app-kit = { version = "0.3", default-features = false, features = ["std", "NSPasteboard", "NSWorkspace", "NSRunningApplication"] }
+objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSString", "NSArray", "NSURL"] }
+
 [target.'cfg(windows)'.dependencies]
 tauri-winrt-notification = "0.8.1"
 windows = { version = "0.58", features = [

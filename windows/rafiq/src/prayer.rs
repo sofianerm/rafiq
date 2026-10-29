@@ -464,7 +464,18 @@ fn toast(app: &AppHandle, a: &Alert) {
     }
 }
 
-#[cfg(not(windows))]
+/// macOS : une notification via osascript, sans bouton (une app non signée ne peut pas en
+/// demander davantage).
+#[cfg(target_os = "macos")]
+fn toast(_app: &AppHandle, a: &Alert) {
+    let quote = |s: &str| format!("\"{}\"", s.replace('\\', "\\\\").replace('"', "\\\""));
+    let script = format!("display notification {} with title {}", quote(&a.body), quote(&a.title));
+    if let Err(e) = std::process::Command::new("osascript").args(["-e", &script]).spawn() {
+        crate::applog(&format!("prayer: notification failed: {e}"));
+    }
+}
+
+#[cfg(not(any(windows, target_os = "macos")))]
 fn toast(_app: &AppHandle, _a: &Alert) {}
 
 /// A one-off silent toast for the other modules (Clippy's errors), with no button

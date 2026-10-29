@@ -100,6 +100,33 @@ mod win {
     }
 }
 
+/// macOS : NSPasteboard a son propre compteur de changements ; les gestionnaires de mots de passe
+/// marquent leurs secrets avec les types de nspasteboard.org.
+#[cfg(target_os = "macos")]
+#[allow(unused_unsafe)]
+mod mac {
+    use objc2_app_kit::NSPasteboard;
+
+    pub fn sequence() -> u32 {
+        unsafe { NSPasteboard::generalPasteboard().changeCount() as u32 }
+    }
+
+    pub fn is_private() -> bool {
+        unsafe {
+            let Some(types) = NSPasteboard::generalPasteboard().types() else { return false };
+            (0..types.count()).any(|i| {
+                let t = types.objectAtIndex(i).to_string();
+                t == "org.nspasteboard.ConcealedType" || t == "org.nspasteboard.TransientType"
+            })
+        }
+    }
+}
+
+#[cfg(windows)]
+use win as sys;
+#[cfg(target_os = "macos")]
+use mac as sys;
+
 fn broadcast(app: &AppHandle) {
     let items = ITEMS.lock().unwrap().clone();
     let _ = app.emit("clipboard", &items);
@@ -110,14 +137,14 @@ pub fn start(app: AppHandle) {
         .ok()
         .and_then(|t| serde_json::from_str::<Vec<ClipItem>>(&t).ok())
         .unwrap_or_default();
-    #[cfg(windows)]
+    #[cfg(any(windows, target_os = "macos"))]
     std::thread::spawn(move || {
         let mut seen = 0u32;
         loop {
-            let seq = win::sequence();
+            let seq = sys::sequence();
             if seq != seen {
                 seen = seq;
-                if !win::is_private() {
+                if !sys::is_private() {
                     // A clipboard another app still holds open refuses the read; the next change tries again
                     let text = arboard::Clipboard::new().and_then(|mut c| c.get_text());
                     if let Ok(text) = text {
