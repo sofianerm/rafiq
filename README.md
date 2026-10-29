@@ -29,6 +29,13 @@ Download `Rafiq_<version>_x64-setup.exe` from the [latest release](https://githu
 for the current user, without administrator rights. The installer is **not code-signed**, so Windows
 SmartScreen shows *Windows protected your PC* the first time: choose **More info**, then **Run anyway**.
 
+**macOS** (Apple Silicon and Intel): download `Rafiq_<version>_macOS-universal.dmg`, open it and drag
+Rafiq into Applications. The app is **not signed by Apple**, so macOS refuses it the first time: open
+**System Settings → Privacy & Security** and click **Open Anyway**, or run once in Terminal
+`xattr -cr /Applications/Rafiq.app`. Rafiq lives in the menu bar (no Dock icon); its data is in
+`~/Library/Application Support/rafiq`. Not on the Mac yet: Clippy's global shortcut and the
+"I prayed" button in notifications. Built by [`.github/workflows/macos.yml`](.github/workflows/macos.yml).
+
 Uninstalling with *Delete the application data* ticked also removes `%APPDATA%\rafiq` (settings,
 cached times, API keys).
 
@@ -94,6 +101,12 @@ modules). Tout se change ensuite dans les Settings → Profil.
 **Installation** : télécharge `Rafiq_<version>_x64-setup.exe` dans la [dernière release](https://github.com/sofianerm/rafiq/releases/latest) et lance-le. L'installeur n'est pas signé : au premier
 lancement, Windows SmartScreen affiche « Windows a protégé votre ordinateur » → **Informations
 complémentaires** → **Exécuter quand même**.
+
+**Mac** : télécharge `Rafiq_<version>_macOS-universal.dmg`, ouvre-le et glisse Rafiq dans Applications.
+L'app n'est pas signée par Apple : au premier lancement macOS la refuse → **Réglages Système →
+Confidentialité et sécurité** → **Ouvrir quand même** (ou, une fois dans le Terminal :
+`xattr -cr /Applications/Rafiq.app`). Rafiq vit dans la barre des menus. Pas encore sur Mac : le
+raccourci Ctrl+Alt+C de Clippy et le bouton « J'ai prié » des notifications.
 
 **Sources** : Transitous ([ses sources](https://transitous.org/sources/), © [OpenStreetMap](https://www.openstreetmap.org/copyright)),
 transport.opendata.ch, Aladhan, Masjidbox, Open-Meteo.
