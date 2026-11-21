@@ -599,6 +599,57 @@ pub fn ai_select_action(name: String) -> AiView {
     view()
 }
 
+const MAX_ACTIONS: usize = 12;
+const MAX_NAME: usize = 40;
+const MAX_PROMPT: usize = 6000;
+
+/// Checks and tidies a list of actions edited in the card. Empty list = the defaults back.
+fn checked_actions(actions: Vec<Action>) -> Result<Vec<Action>, String> {
+    let l = crate::i18n::l;
+    if actions.len() > MAX_ACTIONS {
+        return Err(format!("{} {MAX_ACTIONS}", l("Pas plus d'actions que", "No more actions than")));
+    }
+    let mut out: Vec<Action> = Vec::with_capacity(actions.len());
+    for a in actions {
+        let name = a.name.split_whitespace().collect::<Vec<_>>().join(" ");
+        let prompt = a.prompt.trim().to_string();
+        if name.is_empty() {
+            return Err(l("Donne un nom à l'action", "Give the action a name").into());
+        }
+        if prompt.is_empty() {
+            return Err(format!("{} « {name} »", l("Il manque le prompt de", "The prompt is missing for")));
+        }
+        if name.chars().count() > MAX_NAME {
+            return Err(format!("{} ({MAX_NAME} max)", l("Nom trop long", "Name too long")));
+        }
+        if prompt.chars().count() > MAX_PROMPT {
+            return Err(format!("{} ({MAX_PROMPT} max)", l("Prompt trop long", "Prompt too long")));
+        }
+        if out.iter().any(|o| o.name.to_lowercase() == name.to_lowercase()) {
+            return Err(format!("{} « {name} »", l("Il y a déjà une action", "There is already an action")));
+        }
+        out.push(Action { name, prompt });
+    }
+    Ok(out)
+}
+
+/// The card's action editor: the whole list at once (edited, added, removed), and the action to
+/// select afterwards. Only `actions` and `action` change in ai.json; the keys are left as they are.
+#[tauri::command]
+pub fn ai_save_actions(actions: Vec<Action>, current: Option<String>) -> Result<AiView, String> {
+    let list = checked_actions(actions)?;
+    let mut c = cfg();
+    c.actions = list;
+    if let Some(name) = current {
+        let name = name.split_whitespace().collect::<Vec<_>>().join(" ");
+        if c.actions.iter().any(|a| a.name == name) {
+            c.action = name;
+        }
+    }
+    save(c.normalized());
+    Ok(view())
+}
+
 #[derive(Deserialize)]
 pub struct AiSettings {
     provider: String,
@@ -773,6 +824,23 @@ mod tests {
         assert_eq!(c.action, "Relecture");
         assert_eq!(c.model("openai"), "gpt-5.4-mini");
         assert_eq!(c.hotkey, "Ctrl+Alt+C");
+    }
+
+    #[test]
+    fn edited_actions_are_checked() {
+        let a = |n: &str, p: &str| Action { name: n.into(), prompt: p.into() };
+        let ok = checked_actions(vec![a("  Résumer   en bref ", " Résume. "), a("Poli", "Sois poli")]).unwrap();
+        assert_eq!(ok[0].name, "Résumer en bref");
+        assert_eq!(ok[0].prompt, "Résume.");
+        assert!(checked_actions(vec![a("", "x")]).is_err());
+        assert!(checked_actions(vec![a("x", "  ")]).is_err());
+        assert!(checked_actions(vec![a("Poli", "a"), a("poli", "b")]).is_err());
+        assert!(checked_actions(vec![a(&"n".repeat(41), "x")]).is_err());
+        assert!(checked_actions((0..13).map(|i| a(&format!("a{i}"), "x")).collect()).is_err());
+        // Une liste vide redonne les actions par défaut
+        let mut c = AiConfig::default().normalized();
+        c.actions = checked_actions(vec![]).unwrap();
+        assert_eq!(c.normalized().actions.len(), 5);
     }
 
     #[test]

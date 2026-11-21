@@ -3,6 +3,8 @@
    - La card : choisir l'action, coller ou taper un texte, Ctrl+Entrée ; le résultat remplace le texte
      et part dans le presse-papier. « Presse-papier » traite ce qui y est déjà.
    - Réglages : fournisseur, modèle, clé API (jamais renvoyée à la page), raccourci, collage auto.
+   - Actions : modifier le nom ou le prompt d'une action, en ajouter, en supprimer (ai_save_actions,
+     gardé dans ai.json ; « Par défaut » redonne les actions de départ).
    Taper demande le focus clavier, que le notch ne prend jamais d'habitude : il est emprunté le temps
    de l'édition (ai_focus) et la card reste ouverte tant qu'on écrit (keepOpen). */
 (()=>{
@@ -45,6 +47,15 @@ const STYLE=`
 .cl-set .note{grid-column:2;font-size:10px;color:#606060;margin-top:-3px}
 .cl-set .note.err{color:#FF8A70}
 .cl-set label.chk{grid-column:1/-1;display:flex;gap:6px;align-items:center;cursor:pointer}
+.cl-hint .btns{display:flex;gap:2px;flex:none}
+.cl-act{margin-top:10px;border-top:1px solid #1e1e1e;padding-top:10px;display:flex;flex-direction:column;gap:6px;font-size:11px;color:#9a9a9a}
+.cl-act .cl-chips{margin-bottom:0}
+.cl-chip.new{border-style:dashed;color:#808080}
+.cl-act input,.cl-act textarea{font:12px "Segoe UI",sans-serif;background:#111;border:1px solid #2a2a2a;border-radius:6px;color:#e8e8ea;padding:4px 6px;outline:none;min-width:0;user-select:text;box-sizing:border-box;width:100%}
+.cl-act textarea{min-height:110px;max-height:200px;resize:none;line-height:1.4}
+.cl-act input:focus,.cl-act textarea:focus{border-color:rgba(0,255,136,.55)}
+.cl-act .row{display:flex;gap:6px;align-items:center}
+.cl-btn.danger{color:#FF8A70}.cl-btn.danger:hover{border-color:#FF8A70;color:#FF8A70}
 `;
 // Les libellés de tags tiennent sur une demi-largeur : « Traduire en anglais » devient « ⇄ Anglais »
 const chipLabel=n=>{ const m=/^(?:traduire en|translate (?:to|into)) (.+)$/i.exec(n); return m?'⇄ '+m[1].charAt(0).toUpperCase()+m[1].slice(1):n; };
@@ -67,6 +78,8 @@ registerModule({
   editing:false,
   settings:false,
   form:null,
+  acts:false,        // l'éditeur d'actions est ouvert
+  af:null,           // {idx (-1 = nouvelle), name, prompt, confirm, reset, msg}
   focus:null,        // {field, start, end} : où remettre le curseur après un rendu
   models:{},         // fournisseur → {list, loading, error} : la vraie liste, demandée à l'API
 
@@ -111,8 +124,9 @@ registerModule({
     const st=this.status||(p&&!p.has_key?(trial>0?{text:LT(`${trial} essai${trial>1?'s':''} gratuit${trial>1?'s':''} restant${trial>1?'s':''}`,`${trial} free ${trial>1?'tries':'try'} left`),kind:'ok'}
       :{text:trial===0?LT('Essais gratuits utilisés · ajoute ta clé (Réglages)','Free tries used · add your key (Settings)'):LT(`Ajoute une clé API ${p.name} dans les réglages`,`Add a ${p.name} API key in the settings`),kind:'err'}):null);
     html+=`<div class="cl-status ${st?st.kind:''}">${st?esc(st.text):esc(p?`${p.name} · ${p.model}`:'')}</div>`;
-    html+=`<div class="cl-hint"><span title="${LT("Sur un texte sélectionné, dans n'importe quelle app",'On selected text, in any app')}"><kbd>${esc(v.hotkey||'—')}</kbd>${v.hotkey&&!v.hotkey_ok?'<span style="color:#FF8A70">'+LT('indisponible','unavailable')+'</span>':LT('sur une sélection','on a selection')}</span><button class="cl-btn ghost" data-do="settings">${this.settings?LT('Fermer','Close'):LT('Réglages','Settings')}</button></div>`;
+    html+=`<div class="cl-hint"><span title="${LT("Sur un texte sélectionné, dans n'importe quelle app",'On selected text, in any app')}"><kbd>${esc(v.hotkey||'—')}</kbd>${v.hotkey&&!v.hotkey_ok?'<span style="color:#FF8A70">'+LT('indisponible','unavailable')+'</span>':LT('sur une sélection','on a selection')}</span><span class="btns"><button class="cl-btn ghost" data-do="acts">${this.acts?LT('Fermer','Close'):'Actions'}</button><button class="cl-btn ghost" data-do="settings">${this.settings?LT('Fermer','Close'):LT('Réglages','Settings')}</button></span></div>`;
     if(this.settings) html+=this.renderSettings();
+    if(this.acts) html+=this.renderActions();
     return html;
   },
 
@@ -128,6 +142,51 @@ registerModule({
       +`<label class="chk"><input type="checkbox" data-f="auto"${f.auto?' checked':''}> ${LT('Coller le résultat à la place de la sélection','Paste the result over the selection')}</label>`
       +`<div class="full"><button class="cl-btn go" data-do="save">${LT('Enregistrer','Save')}</button><span class="cl-status ${f.msg?f.msg.kind:''}" style="margin:0">${f.msg?esc(f.msg.text):''}</span></div>`
       +`</div>`;
+  },
+
+  // L'éditeur : un tag par action (cliquer pour la modifier), « + Nouvelle » pour en ajouter une
+  renderActions(){
+    const esc=this.ctx.esc, v=this.v;
+    const f=this.af||(this.af=this.editAt(Math.max(0,v.actions.findIndex(a=>a.name===v.action))));
+    const chips=v.actions.map((a,i)=>`<span class="cl-chip${i===f.idx?' on':''}" data-edit="${i}" title="${esc(a.name)}">${esc(chipLabel(a.name))}</span>`).join('')
+      +(v.actions.length<12?`<span class="cl-chip new${f.idx<0?' on':''}" data-edit="-1" title="${LT('Nouvelle action','New action')}">+ ${LT('Nouvelle','New')}</span>`:'');
+    return `<div class="cl-act"><div class="cl-chips">${chips}</div>`
+      +`<span>${LT('Nom','Name')}</span><input data-f="aname" maxlength="40" value="${esc(f.name)}" placeholder="${LT('ex. Résumer','e.g. Summarize')}">`
+      +`<span>${LT("Prompt : ce que l'IA doit faire du texte",'Prompt: what the AI should do with the text')}</span><textarea data-f="aprompt" spellcheck="false" placeholder="${LT('ex. Résume le texte en trois phrases. Réponds uniquement avec le résumé.','e.g. Summarize the text in three sentences. Reply only with the summary.')}">${esc(f.prompt)}</textarea>`
+      +`<div class="row"><button class="cl-btn go" data-do="asave"><span>${f.idx<0?LT('Ajouter','Add'):LT('Enregistrer','Save')}</span></button>`
+      +(f.idx>=0&&v.actions.length>1?`<button class="cl-btn danger" data-do="adel">${f.confirm?LT('Confirmer ?','Confirm?'):LT('Supprimer','Delete')}</button>`:'')+`</div>`
+      +`<div class="row" style="justify-content:space-between"><span class="cl-status ${f.msg?f.msg.kind:''}" style="margin:0">${f.msg?esc(f.msg.text):''}</span>`
+      +`<button class="cl-btn ghost" data-do="areset" title="${LT('Remettre les 5 actions de départ','Bring back the 5 starting actions')}">${f.reset?LT('Confirmer ?','Confirm?'):LT('Par défaut','Defaults')}</button></div>`
+      +`</div>`;
+  },
+  editAt(i){
+    const a=i>=0&&this.v.actions[i];
+    return a?{idx:i,name:a.name,prompt:a.prompt,confirm:false,reset:false,msg:null}:{idx:-1,name:'',prompt:'',confirm:false,reset:false,msg:null};
+  },
+  async saveActions(list,current,msg){
+    const f=this.af;
+    try{
+      this.v=await this.ctx.invoke('ai_save_actions',{actions:list,current});
+      this.af=this.editAt(this.v.actions.findIndex(a=>a.name===this.v.action)); this.af.msg={text:msg,kind:'ok'};
+    }catch(e){ if(f){ f.msg={text:String(e),kind:'err'}; f.confirm=false; f.reset=false; } }
+    this.ctx.update();
+  },
+  saveAction(){
+    const f=this.af, list=this.v.actions.map(a=>({name:a.name,prompt:a.prompt}));
+    const a={name:f.name,prompt:f.prompt};
+    if(f.idx>=0) list[f.idx]=a; else list.push(a);
+    return this.saveActions(list,f.name.trim().replace(/\s+/g,' '),f.idx<0?LT('Action ajoutée','Action added'):LT('Action enregistrée','Action saved'));
+  },
+  deleteAction(){
+    const f=this.af;
+    if(!f.confirm){ f.confirm=true; return this.ctx.update(); }
+    const list=this.v.actions.filter((_,i)=>i!==f.idx).map(a=>({name:a.name,prompt:a.prompt}));
+    return this.saveActions(list,null,LT('Action supprimée','Action deleted'));
+  },
+  resetActions(){
+    const f=this.af;
+    if(!f.reset){ f.reset=true; return this.ctx.update(); }
+    return this.saveActions([],null,LT('Actions de départ remises','Starting actions restored'));
   },
 
   // La liste de l'API quand on l'a ; sinon un champ libre avec les modèles connus en suggestion
@@ -191,7 +250,12 @@ registerModule({
     press('[data-do="go"]',()=>this.go());
     press('[data-do="clip"]',()=>this.fromClipboard());
     press('[data-do="undo"]',()=>{ this.draft=this.prev; this.prev=null; this.status=null; ctx.update(); });
-    press('[data-do="settings"]',()=>{ this.settings=!this.settings; this.form=null; ctx.update(); if(this.settings) this.loadModels(this.v.provider); });
+    press('[data-do="settings"]',()=>{ this.settings=!this.settings; this.form=null; if(this.settings) this.acts=false; ctx.update(); if(this.settings) this.loadModels(this.v.provider); });
+    press('[data-do="acts"]',()=>{ this.acts=!this.acts; this.af=null; if(this.acts) this.settings=false; else if(this.editing) this.release(); ctx.update(); });
+    press('[data-edit]',n=>{ this.af=this.editAt(+n.dataset.edit); ctx.update(); });
+    press('[data-do="asave"]',()=>this.saveAction());
+    press('[data-do="adel"]',()=>this.deleteAction());
+    press('[data-do="areset"]',()=>this.resetActions());
     press('[data-do="models"]',()=>{ if(this.form) this.loadModels(this.form.provider,this.form.key); });
     press('[data-do="save"]',()=>this.save());
     // Où remettre le curseur : lu avant que le focus rendu ci-dessous ne le remplace
@@ -203,6 +267,7 @@ registerModule({
       const keep=()=>{ this.focus={field:f,start:n.selectionStart,end:n.selectionEnd}; };
       const sync=()=>{
         if(f==='text') this.draft=n.value;
+        else if(f==='aname'||f==='aprompt'){ if(this.af){ this.af[f==='aname'?'name':'prompt']=n.value; this.af.confirm=false; this.af.reset=false; } }
         else if(this.form){
           if(f==='auto') this.form.auto=n.checked; else this.form[f]=n.value;
           if(f==='model') this.form.touched=true;
@@ -215,7 +280,8 @@ registerModule({
       n.addEventListener('keydown',ev=>{
         if(ev.key==='Escape'){ n.blur(); this.release(); ctx.update(); }
         else if(f==='text'&&ev.key==='Enter'&&ev.ctrlKey){ ev.preventDefault(); this.go(); }
-        else if(f!=='text'&&f!=='auto'&&ev.key==='Enter'){ ev.preventDefault(); this.save(); }
+        else if((f==='aname'&&ev.key==='Enter')||(f==='aprompt'&&ev.key==='Enter'&&ev.ctrlKey)){ ev.preventDefault(); this.saveAction(); }
+        else if(f!=='text'&&f!=='auto'&&f!=='aname'&&f!=='aprompt'&&ev.key==='Enter'){ ev.preventDefault(); this.save(); }
       });
       // Quitter tous les champs (clic ailleurs, autre appli) rend le focus et laisse la card se fermer
       n.addEventListener('blur',()=>setTimeout(()=>{

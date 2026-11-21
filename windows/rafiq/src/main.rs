@@ -1787,6 +1787,7 @@ fn main() {
             screentime::get_screentime,
             ai::ai_get,
             ai::ai_select_action,
+            ai::ai_save_actions,
             ai::ai_save,
             ai::ai_run,
             ai::ai_apply_clipboard,
