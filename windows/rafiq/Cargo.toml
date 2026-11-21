@@ -1,6 +1,6 @@
 [package]
 name = "rafiq"
-version = "1.19.0"
+version = "1.20.0"
 edition = "2021"
 description = "Rafiq for Windows — usage notch for Claude, Codex, Cursor and Antigravity"
 license = "MIT"

@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Rafiq",
-  "version": "1.19.0",
+  "version": "1.20.0",
   "identifier": "com.sofianerm.rafiq",
   "build": {
     "frontendDist": "ui"
@@ -49,8 +49,8 @@
   },
   "plugins": {
     "updater": {
-      "endpoints": [],
-      "pubkey": "REPLACE_WITH_TAURI_PUBLIC_KEY",
+      "endpoints": ["https://github.com/sofianerm/rafiq/releases/latest/download/latest.json"],
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDRGRjk4QzA2REE2NzQ4MUMKUldRY1NHZmFCb3o1VDJqblhLa2VEWHZ0YXp5ekFjL3B0cG40anJnYWhCdWozdGlZNmJYbktEa1UK",
       "windows": {
         "installMode": "passive"
       }

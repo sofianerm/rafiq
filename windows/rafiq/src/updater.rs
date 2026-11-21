@@ -14,11 +14,11 @@
 //! so only in the log. The Mac's updater was hanging on "Checking…" as recently as 1.14.0;
 //! the lesson taken from that is that an update check is never worth blocking on.
 //!
-//! Rafiq has no releases of its own yet, so `plugins.updater.endpoints` is empty and the
-//! pubkey is the placeholder: the updater is switched off (no check, no install, no row in
-//! Settings). It used to point at upstream vinzdg/codenotch, whose builds must never replace
-//! Rafiq. To turn it back on, put our own `latest.json` URL in `endpoints` and our public key
-//! in `pubkey` (see the README) — nothing else needs to change.
+//! Rafiq lit le `latest.json` de ses propres releases (sofianerm/rafiq), écrit et signé par
+//! `scripts/build-installers.ps1` avec la clé privée gardée hors du dépôt (`%USERPROFILE%\.tauri`).
+//! It used to point at upstream vinzdg/codenotch, whose builds must never replace Rafiq.
+//! Vérifie 20 s après le lancement puis toutes les 6 h ; une version nouvelle donne un toast (une
+//! fois) et la ligne « Mettre à jour vers x.y.z » dans le menu du tray.
 
 use serde::Serialize;
 use std::sync::Mutex;
@@ -56,6 +56,8 @@ fn set(app: &AppHandle, mut next: UpdateState) {
     next.enabled = true;
     *state() = Some(next.clone());
     let _ = app.emit("update_state", &next);
+    // La ligne du tray suit l'état (« Mettre à jour vers x.y.z »…)
+    crate::tray::refresh_menu(app);
 }
 
 #[tauri::command]
@@ -90,12 +92,48 @@ fn configured_in(updater: Option<&serde_json::Value>) -> bool {
     key_ok && feed_ok
 }
 
+/// Le menu du tray : « Rechercher les mises à jour », ou « Mettre à jour vers x.y.z » quand une
+/// version plus récente est en ligne, ou « Mise à jour en cours… ». `None` sans flux configuré.
+pub fn tray_label(app: &AppHandle) -> Option<String> {
+    if !configured(app) {
+        return None;
+    }
+    let st = state().clone().unwrap_or_default();
+    let l = crate::i18n::l;
+    Some(if st.installing {
+        l("Mise à jour en cours…", "Updating…").to_string()
+    } else if let Some(v) = st.available {
+        format!("{} {v}", l("Mettre à jour vers", "Update to"))
+    } else if st.checking {
+        l("Recherche des mises à jour…", "Checking for updates…").to_string()
+    } else {
+        l("Rechercher les mises à jour", "Check for updates").to_string()
+    })
+}
+
+/// Le clic sur la ligne du tray : installe la version proposée, sinon cherche (et dit le résultat)
+pub fn tray_clicked(app: &AppHandle) {
+    if state().as_ref().is_some_and(|s| s.available.is_some()) {
+        install_update(app.clone());
+    } else {
+        check(app.clone(), true);
+    }
+}
+
+/// La version déjà annoncée par un toast, pour ne le faire qu'une fois
+static ANNOUNCED: Mutex<String> = Mutex::new(String::new());
+
 /// Looks for a newer release. Answers immediately; the result arrives as `update_state`.
 ///
-/// Called once a few seconds after launch, and again whenever someone opens Settings and
+/// Called shortly after launch and every few hours, and again whenever someone opens Settings and
 /// presses Check. Nothing here touches the notch.
 #[tauri::command]
 pub fn check_for_update(app: AppHandle) {
+    check(app, false);
+}
+
+/// `asked` : demandé depuis le tray, on dit aussi « déjà à jour » ou l'échec
+fn check(app: AppHandle, asked: bool) {
     if !configured(&app) {
         return;
     }
@@ -111,16 +149,34 @@ pub fn check_for_update(app: AppHandle) {
             Ok(Some(update)) => {
                 crate::applog(&format!("updater: {} is available", update.version));
                 set(&app, UpdateState { available: Some(update.version.clone()), ..Default::default() });
+                // Un seul toast par version : discret, le tray garde la ligne « Mettre à jour vers… »
+                let first = std::mem::replace(&mut *ANNOUNCED.lock().unwrap_or_else(|e| e.into_inner()), update.version.clone()) != update.version;
+                if first || asked {
+                    let l = crate::i18n::l;
+                    crate::prayer::notify(
+                        &app,
+                        &format!("{} {}", l("Rafiq : nouvelle version", "Rafiq: new version"), update.version),
+                        &format!("{} {}", l("Clic droit sur l'icône Rafiq → Mettre à jour vers", "Right-click the Rafiq icon → Update to"), update.version),
+                    );
+                }
             }
             Ok(None) => {
                 crate::applog("updater: this is the newest release");
                 set(&app, UpdateState::default());
+                if asked {
+                    let l = crate::i18n::l;
+                    crate::prayer::notify(&app, "Rafiq", &format!("{} ({})", l("Tu as la dernière version", "You have the latest version"), env!("CARGO_PKG_VERSION")));
+                }
             }
             // Never a dialogue and never a badge: a check that could not be made says nothing
             // about whether an update exists, and the app it is running in works perfectly well.
             Err(e) => {
                 crate::applog(&format!("updater: check failed ({e})"));
-                set(&app, UpdateState { message: Some("Could not check for updates".into()), ..Default::default() });
+                let msg = crate::i18n::l("Impossible de vérifier les mises à jour", "Could not check for updates");
+                set(&app, UpdateState { message: Some(msg.into()), ..Default::default() });
+                if asked {
+                    crate::prayer::notify(&app, "Rafiq", msg);
+                }
             }
         }
     });
@@ -153,7 +209,7 @@ pub fn install_update(app: AppHandle) {
                 crate::applog(&format!("updater: install failed ({e})"));
                 set(&app, UpdateState {
                     available: state().as_ref().and_then(|s| s.available.clone()),
-                    message: Some("Could not install the update".into()),
+                    message: Some(crate::i18n::l("Impossible d'installer la mise à jour", "Could not install the update").into()),
                     ..Default::default()
                 });
             }
@@ -161,7 +217,10 @@ pub fn install_update(app: AppHandle) {
     });
 }
 
-/// One check shortly after launch.
+/// Entre deux vérifications, tant que Rafiq reste ouvert
+const EVERY_SECS: u64 = 6 * 3600;
+
+/// One check shortly after launch, then one every six hours.
 ///
 /// Delayed rather than immediate: the first seconds belong to reading usage and drawing the
 /// notch, and an update that has waited since the last release can wait twenty more seconds.
@@ -169,7 +228,10 @@ pub fn check_on_launch(app: &AppHandle) {
     let app = app.clone();
     std::thread::spawn(move || {
         std::thread::sleep(std::time::Duration::from_secs(20));
-        check_for_update(app);
+        loop {
+            check_for_update(app.clone());
+            std::thread::sleep(std::time::Duration::from_secs(EVERY_SECS));
+        }
     });
 }
 
@@ -192,6 +254,13 @@ mod tests {
         let updater = conf.pointer("/plugins/updater");
         let text = updater.map(|u| u.to_string()).unwrap_or_default();
         assert!(!text.contains("vinzdg"), "the updater must not offer upstream Codenotch builds: {text}");
-        assert!(!configured_in(updater), "no Rafiq release feed exists yet: the updater stays off");
+        assert!(configured_in(updater), "the updater reads Rafiq's own releases");
+        assert_eq!(
+            conf.pointer("/plugins/updater/endpoints/0").and_then(|e| e.as_str()),
+            Some("https://github.com/sofianerm/rafiq/releases/latest/download/latest.json")
+        );
+        // Les installeurs (et eux seuls) sont signés pour l'updater
+        let bundle: serde_json::Value = serde_json::from_str(include_str!("../tauri.bundle.conf.json")).unwrap();
+        assert_eq!(bundle.pointer("/bundle/createUpdaterArtifacts"), Some(&json!(true)));
     }
 }

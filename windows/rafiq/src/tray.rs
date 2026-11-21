@@ -78,13 +78,12 @@ fn build_menu_from(app: &AppHandle, lang: &str, lines: &[(String, String, bool)]
     for item in &items {
         menu = menu.item(item);
     }
-    menu.separator()
-        .item(&refresh)
-        .item(&show_notch)
-        .item(&settings)
-        .separator()
-        .item(&quit)
-        .build()
+    menu = menu.separator().item(&refresh).item(&show_notch);
+    if let Some(label) = crate::updater::tray_label(app) {
+        let update = MenuItemBuilder::with_id("update", label).build(app)?;
+        menu = menu.item(&update);
+    }
+    menu.item(&settings).separator().item(&quit).build()
 }
 
 /// The language the menu speaks, already resolved: `traymenu` picks its wording by code and has no
@@ -138,7 +137,10 @@ pub fn refresh_menu(app: &AppHandle) {
         if let Some(tray) = handle.tray_by_id("main") {
             let lang = language(&handle);
             let lines = menu_lines(&handle, &lang);
-            let key = (lang.clone(), lines.clone());
+            // La ligne des mises à jour change aussi le menu
+            let mut seen = lines.clone();
+            seen.push(("update".into(), crate::updater::tray_label(&handle).unwrap_or_default(), true));
+            let key = (lang.clone(), seen);
             if SHOWN.lock().unwrap().as_ref() == Some(&key) {
                 // A tooltip can change without a line changing, and setting it closes nothing.
                 let _ = tray.set_tooltip(Some(&tooltip(&handle)));
@@ -166,6 +168,7 @@ fn handle(app: &AppHandle, id: &str) {
     match id {
         "refresh" => crate::refresh_all(app),
         "show_notch" => crate::keepalive::reshow(app, "tray menu"),
+        "update" => crate::updater::tray_clicked(app),
         "settings" => crate::settings_window::open(app),
         "quit" => app.exit(0),
         _ => {}

@@ -1,5 +1,6 @@
 {
   "bundle": {
+    "createUpdaterArtifacts": true,
     "resources": {
       "../target/hook/release/rafiq-hook.exe": "rafiq-hook.exe"
     }
