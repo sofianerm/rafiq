@@ -1,7 +1,9 @@
 //! Prayer times for the notch's prayer module, from a mosque's public Masjidbox page.
 //!
 //! The page (`masjidbox.com/horaires-de-priere/<slug>`) is rendered server-side with the next seven
-//! days already in it, as `window.REDUX_STATE = '<escaped JSON>'`. Reading that needs no API key,
+//! days already in it: once as `window.REDUX_STATE = '<escaped JSON>'`, since November 2026 as the
+//! `payload:` of TanStack Start's serialized router state (seroval, read by `Seroval` below; the
+//! fields did not change). Reading that needs no API key,
 //! where the JSON API behind the page (`api.masjidbox.com`) refuses a request without one. The page
 //! cannot be fetched from the notch itself (CORS), so it is read here and pushed as `prayer`.
 //!
@@ -101,14 +103,183 @@ fn js_unescape(s: &str) -> String {
     String::from_utf16_lossy(&units)
 }
 
+/// Reads the subset of JavaScript that seroval (TanStack Start's serializer) writes for plain data:
+/// `{key:value}` with bare or quoted keys, `[..]`, strings, numbers, `!0`/`!1`, `null`, `void 0`,
+/// and `$R[n]=value` / `$R[n]` (a value numbered on first sight, then referred to by number).
+struct Seroval<'a> {
+    s: &'a [u8],
+    i: usize,
+    refs: std::collections::HashMap<u64, serde_json::Value>,
+}
+
+impl<'a> Seroval<'a> {
+    fn err<T>(&self, what: &str) -> Result<T, String> {
+        Err(format!("page data: {what} at {}", self.i))
+    }
+    fn eat(&mut self, tok: &str) -> bool {
+        if self.s[self.i..].starts_with(tok.as_bytes()) {
+            self.i += tok.len();
+            true
+        } else {
+            false
+        }
+    }
+    fn value(&mut self) -> Result<serde_json::Value, String> {
+        use serde_json::Value;
+        if self.eat("$R[") {
+            let start = self.i;
+            while self.i < self.s.len() && self.s[self.i].is_ascii_digit() {
+                self.i += 1;
+            }
+            let n: u64 = std::str::from_utf8(&self.s[start..self.i]).unwrap().parse().map_err(|_| "page data: bad $R index")?;
+            if !self.eat("]") {
+                return self.err("unterminated $R[");
+            }
+            if self.eat("=") {
+                let v = self.value()?;
+                self.refs.insert(n, v.clone());
+                return Ok(v);
+            }
+            // A reference to a value outside what was read (or a cycle) comes out as null
+            return Ok(self.refs.get(&n).cloned().unwrap_or(Value::Null));
+        }
+        match self.s.get(self.i) {
+            Some(b'{') => {
+                self.i += 1;
+                let mut map = serde_json::Map::new();
+                if self.eat("}") {
+                    return Ok(Value::Object(map));
+                }
+                loop {
+                    let key = if self.s.get(self.i) == Some(&b'"') {
+                        self.string()?
+                    } else {
+                        let start = self.i;
+                        while self.i < self.s.len() && (self.s[self.i].is_ascii_alphanumeric() || b"_$".contains(&self.s[self.i])) {
+                            self.i += 1;
+                        }
+                        if start == self.i {
+                            return self.err("expected a key");
+                        }
+                        String::from_utf8_lossy(&self.s[start..self.i]).into_owned()
+                    };
+                    if !self.eat(":") {
+                        return self.err("expected ':'");
+                    }
+                    let v = self.value()?;
+                    map.insert(key, v);
+                    if self.eat(",") {
+                        continue;
+                    }
+                    if self.eat("}") {
+                        return Ok(Value::Object(map));
+                    }
+                    return self.err("expected ',' or '}'");
+                }
+            }
+            Some(b'[') => {
+                self.i += 1;
+                let mut arr = Vec::new();
+                if self.eat("]") {
+                    return Ok(Value::Array(arr));
+                }
+                loop {
+                    arr.push(self.value()?);
+                    if self.eat(",") {
+                        continue;
+                    }
+                    if self.eat("]") {
+                        return Ok(Value::Array(arr));
+                    }
+                    return self.err("expected ',' or ']'");
+                }
+            }
+            Some(b'"') => self.string().map(Value::String),
+            _ if self.eat("!0") => Ok(Value::Bool(true)),
+            _ if self.eat("!1") => Ok(Value::Bool(false)),
+            _ if self.eat("null") || self.eat("void 0") => Ok(Value::Null),
+            Some(c) if c.is_ascii_digit() || *c == b'-' || *c == b'.' => {
+                let start = self.i;
+                self.i += 1;
+                while self.i < self.s.len() && (self.s[self.i].is_ascii_digit() || b".eE+-".contains(&self.s[self.i])) {
+                    self.i += 1;
+                }
+                let t = std::str::from_utf8(&self.s[start..self.i]).unwrap();
+                let t = if t.starts_with('.') { format!("0{t}") } else if t.starts_with("-.") { format!("-0{}", &t[1..]) } else { t.to_string() };
+                serde_json::from_str(&t).map_err(|_| format!("page data: bad number {t}"))
+            }
+            _ => self.err("unsupported value"),
+        }
+    }
+    /// A double-quoted JavaScript string, escapes included (`\uXXXX` as UTF-16 units)
+    fn string(&mut self) -> Result<String, String> {
+        self.i += 1;
+        let mut units: Vec<u16> = Vec::new();
+        let hex = |h: &[u8]| std::str::from_utf8(h).ok().and_then(|h| u16::from_str_radix(h, 16).ok());
+        loop {
+            let Some(&c) = self.s.get(self.i) else { return self.err("unterminated string") };
+            match c {
+                b'"' => {
+                    self.i += 1;
+                    return Ok(String::from_utf16_lossy(&units));
+                }
+                b'\\' => {
+                    let e = *self.s.get(self.i + 1).ok_or("page data: bad escape")?;
+                    self.i += 2;
+                    match e {
+                        b'n' => units.push(10),
+                        b'r' => units.push(13),
+                        b't' => units.push(9),
+                        b'b' => units.push(8),
+                        b'f' => units.push(12),
+                        b'v' => units.push(11),
+                        b'0' => units.push(0),
+                        b'u' => {
+                            let u = self.s.get(self.i..self.i + 4).and_then(hex).ok_or("page data: bad \\u")?;
+                            units.push(u);
+                            self.i += 4;
+                        }
+                        b'x' => {
+                            let u = self.s.get(self.i..self.i + 2).and_then(hex).ok_or("page data: bad \\x")?;
+                            units.push(u);
+                            self.i += 2;
+                        }
+                        other => units.push(other as u16),
+                    }
+                }
+                _ => {
+                    // Raw text: take the whole UTF-8 char (the slice starts on a char boundary)
+                    let rest = std::str::from_utf8(&self.s[self.i..]).map_err(|_| "page data: not UTF-8")?;
+                    let ch = rest.chars().next().unwrap();
+                    let mut buf = [0u16; 2];
+                    units.extend_from_slice(ch.encode_utf16(&mut buf));
+                    self.i += ch.len_utf8();
+                }
+            }
+        }
+    }
+}
+
+/// The mosque as the page carries it: `window.REDUX_STATE` (the old site) or the `payload:` of
+/// TanStack Start's serialized router state (the site since November 2026). Same fields in both.
+fn mosque_of_page(html: &str) -> Result<serde_json::Value, String> {
+    let marker = "window.REDUX_STATE = '";
+    if let Some(at) = html.find(marker) {
+        let start = at + marker.len();
+        let len = html[start..].find('\'').ok_or("REDUX_STATE is not terminated")?;
+        let json: serde_json::Value =
+            serde_json::from_str(&js_unescape(&html[start..start + len])).map_err(|e| format!("REDUX_STATE: {e}"))?;
+        return Ok(json["masjidbox"]["masjidboxAthany"].clone());
+    }
+    let marker = "payload:";
+    let start = html.find(marker).ok_or("the page has neither REDUX_STATE nor payload (layout changed?)")? + marker.len();
+    let mut p = Seroval { s: html[start..].as_bytes(), i: 0, refs: Default::default() };
+    p.value()
+}
+
 /// Pulls the mosque out of the page's HTML
 fn parse_page(html: &str, slug: &str) -> Result<PrayerSnapshot, String> {
-    let marker = "window.REDUX_STATE = '";
-    let start = html.find(marker).ok_or("the page has no REDUX_STATE (layout changed?)")? + marker.len();
-    let len = html[start..].find('\'').ok_or("REDUX_STATE is not terminated")?;
-    let json: serde_json::Value =
-        serde_json::from_str(&js_unescape(&html[start..start + len])).map_err(|e| format!("REDUX_STATE: {e}"))?;
-    let m = &json["masjidbox"]["masjidboxAthany"];
+    let m = &mosque_of_page(html)?;
     let days = m["timetable"].as_array().cloned().unwrap_or_default();
     if days.is_empty() {
         return Err("no timetable on the page (unknown mosque?)".into());
@@ -609,6 +780,32 @@ mod tests {
         assert_eq!(s.days.len(), 1);
         assert_eq!(s.days[0]["fajr"], "2026-09-23T06:00:00+02:00");
         assert!(parse_page("<html></html>", "m").is_err());
+    }
+
+    #[test]
+    fn parses_tanstack_payload() {
+        let html = r#"<script>$_TSR.router=($R=>$R[0]={l:$R[14]={kind:"page",payload:$R[15]={name:"Mosquée de test",address:"1 rue",verified:!0,settings:$R[16]={ampm:!1},timetable:$R[18]=[$R[19]={fajr:"2026-11-21T06:17:00+01:00",date:"2026-11-21T00:00:00+01:00",hijri:$R[20]={dayOfMonth:11,formatted:"السبت 11"},iqamah:$R[21]={fajr:"2026-11-21T06:32:00+01:00"}},$R[23]={date:"2026-11-27T00:00:00+01:00",jumuah:$R[44]=["2026-11-27T12:25:00+01:00","2026-11-27T13:25:00+01:00"],again:$R[44],x:void 0,n:-1.5}],isStale:!1},renderedAt:"x"}})($R["tsr"]);</script>"#;
+        let s = parse_page(html, "m").unwrap();
+        assert_eq!(s.name, "Mosquée de test");
+        assert_eq!(s.days.len(), 2);
+        assert_eq!(s.days[0]["iqamah"]["fajr"], "2026-11-21T06:32:00+01:00");
+        assert_eq!(s.days[0]["hijri"]["dayOfMonth"], 11);
+        assert_eq!(s.days[0]["hijri"]["formatted"], "السبت 11");
+        assert_eq!(s.days[1]["jumuah"][1], "2026-11-27T13:25:00+01:00");
+        assert_eq!(s.days[1]["again"], s.days[1]["jumuah"]);
+        assert_eq!(s.days[1]["n"], -1.5);
+        assert!(parse_page("<script>payload:{name:</script>", "m").is_err());
+    }
+
+    /// Réseau : `RAFIQ_MASJID=<slug> cargo test -- --ignored live_masjidbox`
+    #[test]
+    #[ignore]
+    fn live_masjidbox() {
+        let slug = std::env::var("RAFIQ_MASJID").expect("RAFIQ_MASJID = slug of a Masjidbox mosque");
+        let s = read_once(&slug).unwrap();
+        assert!(s.days.len() >= 7, "{} days", s.days.len());
+        assert!(s.days[0]["iqamah"]["fajr"].is_string());
+        eprintln!("{} — {}", s.name, s.days[0]);
     }
 
     /// Réseau : `cargo test -- --ignored live_aladhan`
