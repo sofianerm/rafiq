@@ -71,6 +71,7 @@ fn build_menu_from(app: &AppHandle, lang: &str, lines: &[(String, String, bool)]
         );
     }
     let refresh = MenuItemBuilder::with_id("refresh", tr(&lang, "refresh_all")).build(app)?;
+    let show_notch = MenuItemBuilder::with_id("show_notch", tr(&lang, "show_notch")).build(app)?;
     let settings = MenuItemBuilder::with_id("settings", tr(&lang, "settings")).build(app)?;
     let quit = MenuItemBuilder::with_id("quit", tr(&lang, "quit_app")).build(app)?;
     let mut menu = MenuBuilder::new(app);
@@ -79,6 +80,7 @@ fn build_menu_from(app: &AppHandle, lang: &str, lines: &[(String, String, bool)]
     }
     menu.separator()
         .item(&refresh)
+        .item(&show_notch)
         .item(&settings)
         .separator()
         .item(&quit)
@@ -163,6 +165,7 @@ fn handle(app: &AppHandle, id: &str) {
     }
     match id {
         "refresh" => crate::refresh_all(app),
+        "show_notch" => crate::keepalive::reshow(app, "tray menu"),
         "settings" => crate::settings_window::open(app),
         "quit" => app.exit(0),
         _ => {}

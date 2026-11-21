@@ -1154,6 +1154,9 @@ for(const m of NOTCH_MODULES) moduleCall(m,'init',{update:()=>moduleChanged(m.id
   visible:()=>!folded&&card.classList.contains('show')&&hoverId===m.id});
 renderRing();
 setInterval(renderRing,30_000); // stale state and reset copy move with time
+// Battement pour le gardien (keepalive.rs) : sans lui pendant 3 min, la page est rechargée
+invoke('notch_alive').catch(()=>{});
+setInterval(()=>invoke('notch_alive').catch(()=>{}),10_000);
 setInterval(async()=>{
   if(!claudeAuth.busy&&!(hoverId==='claude'&&card.classList.contains('show'))) return;
   try{

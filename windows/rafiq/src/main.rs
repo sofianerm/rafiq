@@ -34,6 +34,7 @@ mod ai;
 mod setup;
 mod transit;
 mod platform;
+mod keepalive;
 
 use std::sync::Mutex;
 use tauri::{AppHandle, Emitter, Manager};
@@ -352,6 +353,8 @@ pub fn place_notch(app: &AppHandle) {
         // The page is `size` × the monitor scale smaller than the window in CSS px.
         let css = (ms * size).max(0.01);
         let insets = work_insets(&mon, placed.0, placed.1, placed.2, placed.3).map(|v| v as f64 / css);
+        // Ce que le gardien (keepalive) compare à la position réelle de la fenêtre
+        *keepalive::PLACED.lock().unwrap() = Some(placed);
         *NOTCH_INSETS.lock().unwrap() = insets;
         let _ = w.emit("notch_insets", insets);
         // Placement log line: the first thing to check when the notch is not visible. Appended, not
@@ -836,7 +839,8 @@ pub fn applog(line: &str) {
         std::fs::OpenOptions::new().create(true).append(true).open(&log)
     };
     if let Ok(mut f) = opened {
-        let _ = writeln!(f, "{line}");
+        // Horodaté : sans l'heure, impossible de relier une ligne à « le notch a disparu vers 14 h »
+        let _ = writeln!(f, "{} {line}", chrono::Local::now().format("%Y-%m-%d %H:%M:%S"));
     }
 }
 
@@ -1690,6 +1694,8 @@ fn main() {
             // tray icon hidden it is the way back. Logged too, for a rebuild that was not picked up.
             applog(&format!("single instance: another launch was refused; the running instance is build={BUILD} — quit it from the tray first if you just rebuilt"));
             settings_window::open(app);
+            // Relancer Rafiq, c'est souvent « je ne vois plus le notch » : il est remis à l'écran
+            keepalive::reshow(app, "second launch");
         }))
         .manage(AppState {
             store: Mutex::new(Default::default()),
@@ -1785,7 +1791,8 @@ fn main() {
             ai::ai_run,
             ai::ai_apply_clipboard,
             ai::ai_focus,
-            ai::ai_list_models
+            ai::ai_list_models,
+            keepalive::notch_alive
         ])
         .setup(move |app| {
             // Sur macOS : pas d'icône dans le Dock, Rafiq vit dans la barre des menus et le notch
@@ -1824,6 +1831,7 @@ fn main() {
             std::thread::spawn(move || reload_glyphs(&gh));
             start_pointer_watchdog(handle.clone());
             start_work_area_watch(handle.clone());
+            keepalive::start(handle.clone());
             // Seen-clears-it scan
             let acker = handle.clone();
             std::thread::spawn(move || {

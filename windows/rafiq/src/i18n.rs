@@ -106,6 +106,7 @@ pub fn tr(lang: &str, key: &str) -> &'static str {
         ("fr", "refresh_now") => "Actualiser",
         ("fr", "open_host") => "Ouvrir %@",
         ("fr", "keep_open") => "Garder ouvert",
+        ("fr", "show_notch") => "Réafficher le notch",
         (_, "open_data") => "Open data folder (logs / icons)",
         (_, "install") => "Install Claude Code hooks",
         (_, "uninstall") => "Uninstall hooks",
@@ -122,6 +123,7 @@ pub fn tr(lang: &str, key: &str) -> &'static str {
         (_, "refresh_now") => "Refresh now",
         (_, "open_host") => "Open %@",
         (_, "keep_open") => "Keep open",
+        (_, "show_notch") => "Show the notch again",
         _ => "?",
     }
 }
@@ -130,9 +132,9 @@ pub fn tr(lang: &str, key: &str) -> &'static str {
 mod tests {
     use super::tr;
 
-    const KEYS: [&str; 16] = [
+    const KEYS: [&str; 17] = [
         "open_data", "install", "uninstall", "language", "lang_auto", "reset_pos", "quit", "hooks_missing",
-        "autostart", "refresh_all", "waiting", "quit_app", "settings", "refresh_now", "open_host", "keep_open",
+        "autostart", "refresh_all", "waiting", "quit_app", "settings", "refresh_now", "open_host", "keep_open", "show_notch",
     ];
 
     #[test]

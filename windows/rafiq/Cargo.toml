@@ -1,6 +1,6 @@
 [package]
 name = "rafiq"
-version = "1.18.0"
+version = "1.18.1"
 edition = "2021"
 description = "Rafiq for Windows — usage notch for Claude, Codex, Cursor and Antigravity"
 license = "MIT"
@@ -44,6 +44,7 @@ tauri-winrt-notification = "0.8.1"
 windows = { version = "0.58", features = [
   "Win32_Foundation",
   "Win32_UI_WindowsAndMessaging",
+  "Win32_UI_Shell",
   "Win32_System_Diagnostics_ToolHelp",
   "Win32_Security_Credentials",
   "Win32_Graphics_Gdi",
